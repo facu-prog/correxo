@@ -1469,6 +1469,13 @@ function buildPdf(opts){
     if(L.voCm!=null) rows+=metricRow('Oscilación vertical',L.voCm.toFixed(1),'cm (est.)',band(L.voCm,9,13),L.voCm<=9?'Eficiente':L.voCm<=13?'Media':'Alta');
     else if(L.voPct!=null) rows+=metricRow('Oscilación vertical',L.voPct.toFixed(1),'% estatura',band(L.voPct,5.5,8),L.voPct<=5.5?'Eficiente':L.voPct<=8?'Media':'Alta');
     if(L.overOffset!=null) rows+=metricRow('Overstride',(L.overOffset*100).toFixed(0),'% pierna',L.overOffset<=0.15?'b-good':L.overOffset<=0.30?'b-warn':'b-bad',L.overOffset<=0.15?'Neutral':L.overOffset<=0.30?'Leve':'Marcado');
+    if(L.gait&&L.gait.gaitOk){const g=L.gait;
+      rows+=metricRow('Tiempo de contacto (GCT)',Math.round(g.gct*1000),'ms','b-good','Medido');
+      if(g.flight!=null) rows+=metricRow('Tiempo de vuelo',Math.round(g.flight*1000),'ms','b-good','Medido');
+      if(g.dutyFactor!=null) rows+=metricRow('Duty factor',g.dutyFactor.toFixed(0),'%','b-good','Medido');
+      if(g.symmetry!=null) rows+=metricRow('Simetría izq/der',g.symmetry.toFixed(0),'%',g.symmetry<=5?'b-good':g.symmetry<=10?'b-warn':'b-bad',g.symmetry<=5?'Simétrico':g.symmetry<=10?'Leve asimetría':'Asimetría marcada');
+      if(g.footStrike) rows+=metricRow('Patrón de pisada',g.footStrike,'','b-good','Descriptivo');
+    }
   }
   if(R&&R.enough){
     if(R.cpd!=null) rows+=metricRow('Caída pélvica contralateral',R.cpd.toFixed(0),'° pico',R.cpd<=6?'b-good':R.cpd<=10?'b-warn':'b-bad',R.cpd<=6?'Neutral':R.cpd<=10?'Leve':'Marcado');
