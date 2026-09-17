@@ -400,6 +400,11 @@
   .oi-conc-si{color:var(--good)} .oi-conc-parcial{color:var(--warn)} .oi-conc-no{color:var(--bad)}
   .op-item .oi-del{background:none;border:1px solid var(--line-strong);color:var(--ink-mute);border-radius:6px;padding:5px 9px;cursor:pointer;font-size:.72rem;flex:none}
   .op-item .oi-del:hover{border-color:var(--bad);color:var(--bad)}
+  .op-cap{background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:14px;margin-top:12px}
+  .op-cap-h{font-weight:700;font-size:.92rem;margin-bottom:10px;display:flex;gap:8px;align-items:baseline}
+  .op-cap-h span{font-family:var(--mono);font-size:.64rem;color:var(--ink-mute);text-transform:uppercase;letter-spacing:.08em}
+  .op-cap .drop{padding:16px 12px}
+  .op-cap .video-box{margin-top:10px}
 </style>
 </head>
 <body>
@@ -834,8 +839,31 @@
             <span>El corredor dio su <b>consentimiento informado</b>: entiende que es un screening (no un diagnóstico), que un profesional evalúa y firma, y autoriza el almacenamiento de sus 2 videos para validación.</span>
           </label>
 
-          <div class="view-status" id="op-status" style="margin-top:16px"></div>
-          <p class="hint">Analizá las dos tomas en las pestañas <b>Vista lateral</b> y <b>Vista trasera</b>; después completá la revisión médica y guardá.</p>
+          <h2 style="font-size:.98rem;margin-top:18px">📹 Capturá las 2 tomas</h2>
+          <p class="hint">Todo acá: cargá y analizá cada video. No hace falta ir a las otras pestañas.</p>
+          <div class="op-cap">
+            <div class="op-cap-h"><b>1 · Perfil</b> <span>vista lateral</span></div>
+            <div class="drop" id="op-lat-drop" tabindex="0" role="button" aria-label="Cargar video de perfil"><div class="big">📤 Video de perfil</div><div class="small">MP4 · WebM · MOV</div></div>
+            <input type="file" id="op-lat-file" accept="video/*">
+            <div class="videoerr" id="op-lat-verr"></div>
+            <div class="video-box" id="op-lat-box"><span class="vbadge">PERFIL</span><video id="op-lat-video" playsinline muted></video><canvas class="overlay" id="op-lat-canvas"></canvas></div>
+            <div class="controls"><button class="btn btn-primary" id="op-lat-run" disabled>▶ Analizar perfil</button><button class="btn btn-secondary" id="op-lat-reset">↻</button></div>
+            <div class="prog" id="op-lat-prog"><div class="prog-track"><div class="prog-fill" id="op-lat-fill"></div></div><div class="prog-meta"><span id="op-lat-ptext">Procesando…</span><span id="op-lat-ftext">0 frames</span></div></div>
+            <div class="empty" id="op-lat-empty" style="padding:14px"><div class="big">📊</div>Cargá y analizá.</div>
+            <div class="results" id="op-lat-results"><div class="quality" id="op-lat-quality"><div class="qhead"><span class="qlabel">Calidad</span><span class="qval" id="op-lat-qval">—</span></div><div class="qstats" id="op-lat-qstats"></div><div class="qwarn" id="op-lat-qwarn" style="display:none"></div></div><div id="op-lat-metrics"></div></div>
+          </div>
+          <div class="op-cap">
+            <div class="op-cap-h"><b>2 · Espaldas</b> <span>vista trasera</span></div>
+            <div class="drop" id="op-rear-drop" tabindex="0" role="button" aria-label="Cargar video de espaldas"><div class="big">📤 Video de espaldas</div><div class="small">MP4 · WebM · MOV</div></div>
+            <input type="file" id="op-rear-file" accept="video/*">
+            <div class="videoerr" id="op-rear-verr"></div>
+            <div class="video-box" id="op-rear-box"><span class="vbadge">ESPALDAS</span><video id="op-rear-video" playsinline muted></video><canvas class="overlay" id="op-rear-canvas"></canvas></div>
+            <div class="controls"><button class="btn btn-primary" id="op-rear-run" disabled>▶ Analizar espaldas</button><button class="btn btn-secondary" id="op-rear-reset">↻</button></div>
+            <div class="prog" id="op-rear-prog"><div class="prog-track"><div class="prog-fill" id="op-rear-fill"></div></div><div class="prog-meta"><span id="op-rear-ptext">Procesando…</span><span id="op-rear-ftext">0 frames</span></div></div>
+            <div class="empty" id="op-rear-empty" style="padding:14px"><div class="big">📊</div>Cargá y analizá.</div>
+            <div class="results" id="op-rear-results"><div class="quality" id="op-rear-quality"><div class="qhead"><span class="qlabel">Calidad</span><span class="qval" id="op-rear-qval">—</span></div><div class="qstats" id="op-rear-qstats"></div><div class="qwarn" id="op-rear-qwarn" style="display:none"></div></div><div id="op-rear-metrics"></div></div>
+          </div>
+          <div class="view-status" id="op-status" style="margin-top:14px"></div>
 
           <h2 style="font-size:.98rem;margin-top:6px">👨‍⚕️ Revisión médica</h2>
           <div class="report-fields">
@@ -959,7 +987,15 @@ const V={
   rear:{samples:[],report:null,analyzing:false,
        video:'rear-video',canvas:'rear-canvas',box:'rear-box',drop:'rear-drop',file:'rear-file',verr:'rear-verr',
        run:'rear-run',reset:'rear-reset',prog:'rear-prog',fill:'rear-fill',ptext:'rear-ptext',ftext:'rear-ftext',
-       empty:'rear-empty',results:'rear-results',quality:'rear-quality',qval:'rear-qval',qstats:'rear-qstats',qwarn:'rear-qwarn',metrics:'rear-metrics'}
+       empty:'rear-empty',results:'rear-results',quality:'rear-quality',qval:'rear-qval',qstats:'rear-qstats',qwarn:'rear-qwarn',metrics:'rear-metrics'},
+  oplat:{samples:[],report:null,analyzing:false,file:null,
+       video:'op-lat-video',canvas:'op-lat-canvas',box:'op-lat-box',drop:'op-lat-drop',file:'op-lat-file',verr:'op-lat-verr',
+       run:'op-lat-run',reset:'op-lat-reset',prog:'op-lat-prog',fill:'op-lat-fill',ptext:'op-lat-ptext',ftext:'op-lat-ftext',
+       empty:'op-lat-empty',results:'op-lat-results',quality:'op-lat-quality',qval:'op-lat-qval',qstats:'op-lat-qstats',qwarn:'op-lat-qwarn',metrics:'op-lat-metrics'},
+  oprear:{samples:[],report:null,analyzing:false,file:null,
+       video:'op-rear-video',canvas:'op-rear-canvas',box:'op-rear-box',drop:'op-rear-drop',file:'op-rear-file',verr:'op-rear-verr',
+       run:'op-rear-run',reset:'op-rear-reset',prog:'op-rear-prog',fill:'op-rear-fill',ptext:'op-rear-ptext',ftext:'op-rear-ftext',
+       empty:'op-rear-empty',results:'op-rear-results',quality:'op-rear-quality',qval:'op-rear-qval',qstats:'op-rear-qstats',qwarn:'op-rear-qwarn',metrics:'op-rear-metrics'}
 };
 const $=id=>document.getElementById(id);
 const el=(view,key)=>$(V[view][key]);
@@ -999,7 +1035,7 @@ async function loadModel(modelType){
     modelReady=true;
     $('modelState').className='model-state ready';
     $('modelText').textContent='Motor listo · BlazePose '+modelType+' ('+via+')';
-    ['lat','rear'].forEach(v=>{ if(el(v,'video').src) el(v,'run').disabled=false; });
+    ['lat','rear','oplat','oprear'].forEach(v=>{ if(el(v,'video').src) el(v,'run').disabled=false; });
   }catch(err){
     console.error('Error cargando modelo:',err);
     $('modelState').className='model-state err';
@@ -1037,15 +1073,17 @@ function resetView(view){
   const st=V[view]; if(st.analyzing) return;
   const video=el(view,'video');
   if(video.src){ try{ URL.revokeObjectURL(video.src); }catch(e){} video.removeAttribute('src'); video.load(); }
-  st.samples=[]; st.report=null;
+  st.samples=[]; st.report=null; st.file=null;
   el(view,'canvas').getContext('2d').clearRect(0,0,el(view,'canvas').width,el(view,'canvas').height);
   el(view,'box').classList.remove('show'); el(view,'verr').classList.remove('show');
   el(view,'results').classList.remove('show'); el(view,'empty').style.display='block';
   el(view,'prog').classList.remove('show'); el(view,'fill').style.width='0%';
   el(view,'run').disabled=true; el(view,'file').value='';
+  if(view==='oplat'){ V.lat.report=null; V.lat.file=null; }
+  if(view==='oprear'){ V.rear.report=null; V.rear.file=null; }
 }
-setupView('lat'); setupView('rear');
-$('speedMode').addEventListener('change',e=>{ if(e.target.value!==currentModelType){ modelReady=false; ['lat','rear'].forEach(v=>el(v,'run').disabled=true); loadModel(e.target.value); }});
+setupView('lat'); setupView('rear'); setupView('oplat'); setupView('oprear');
+$('speedMode').addEventListener('change',e=>{ if(e.target.value!==currentModelType){ modelReady=false; ['lat','rear','oplat','oprear'].forEach(v=>el(v,'run').disabled=true); loadModel(e.target.value); }});
 
 /* ---------- captura de pose (pipeline compartido) ---------- */
 const MAX_ANALYSIS_SEC=25; // tope para no colgar en videos largos
@@ -1082,9 +1120,13 @@ function finish(view){
   const st=V[view];
   st.analyzing=false; el(view,'fill').style.width='100%'; el(view,'ptext').textContent='Listo';
   el(view,'run').disabled=false; el(view,'reset').disabled=false; $('speedMode').disabled=false;
-  st.report = view==='lat' ? computeLateral(st.samples) : computeRear(st.samples);
+  const isLat=(view==='lat'||view==='oplat');
+  st.report = isLat ? computeLateral(st.samples) : computeRear(st.samples);
   renderReport(view,st.report);
+  if(view==='oplat'){ V.lat.report=st.report; V.lat.file=st.file; }
+  else if(view==='oprear'){ V.rear.report=st.report; V.rear.file=st.file; }
   saveState();
+  if(view==='oplat'||view==='oprear') refreshOperator();
 }
 
 /* ---------- dibujo esqueleto ---------- */
@@ -1131,7 +1173,7 @@ function computeBase(S){
 function computeLateral(S){
   const b=computeBase(S);
   const voPx=quantile(b.hipY,0.92)-quantile(b.hipY,0.08);
-  const heightCm=parseFloat($('heightCm').value);
+  const heightCm=parseFloat(($('op-height')||{}).value)||parseFloat(($('heightCm')||{}).value)||NaN;
   let voCm=null,voPct=null;
   if(b.statureMedian){ voPct=voPx/b.statureMedian*100; if(heightCm>0) voCm=voPx*(heightCm/b.statureMedian); }
   // overstride
@@ -1564,7 +1606,7 @@ async function saveRunner(){
     await uploadVid(id,'perfil',V.lat.file);
     await uploadVid(id,'trasera',V.rear.file);
     btn.textContent='✓ Guardado'; setTimeout(()=>{ btn.disabled=false; btn.textContent=prev; },1600);
-    clearRunnerForm(); resetView('lat'); resetView('rear'); loadOpList();
+    clearRunnerForm(); resetView('oplat'); resetView('oprear'); refreshOperator(); loadOpList();
   }catch(e){ err.textContent='No se pudo guardar: '+e.message; err.classList.add('show'); btn.disabled=false; btn.textContent=prev; }
 }
 
