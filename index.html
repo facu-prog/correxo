@@ -850,6 +850,7 @@
 
           <div class="videoerr" id="op-saveerr"></div>
           <button class="btn btn-primary" id="op-save" style="width:100%;margin-top:14px">💾 Guardar corredor (sube los 2 videos)</button>
+          <button class="btn btn-secondary" id="op-pdf" style="width:100%;margin-top:8px">📄 Descargar PDF del corredor (con firma médico)</button>
         </section>
 
         <section class="panel">
@@ -1353,9 +1354,10 @@ function metricRow(name,val,unit,bandClass,bandLabel){
   const cls=bandClass==='b-good'?'pb-good':bandClass==='b-warn'?'pb-warn':'pb-bad';
   return `<tr><td>${name}</td><td>${val} ${unit||''}</td><td class="${cls}">${bandLabel}</td></tr>`;
 }
-function buildPdf(){
-  const runner=($('rep-runner').value||'—').trim();
-  const pro=($('rep-pro').value||'').trim();
+function buildPdf(opts){
+  opts=opts||{};
+  const runner=String(opts.runner!=null?opts.runner:($('rep-runner').value||'—')).trim();
+  const pro=String(opts.pro!=null?opts.pro:($('rep-pro').value||'')).trim();
   const date=new Date().toLocaleDateString('es-AR',{year:'numeric',month:'long',day:'numeric'});
   const L=V.lat.report, R=V.rear.report, F=collectFindings(), idx=computeIndex(F);
   const keys=[...new Set(F.filter(f=>f.key).map(f=>f.key))];
@@ -1373,6 +1375,12 @@ function buildPdf(){
   }
   const plan=keys.length?keys.map(k=>{const e=EXERCISES[k];return `<div class="pex"><b>${e.h}</b> — ${e.p}<br><span style="color:#8a94a3">${e.ev}</span></div>`;}).join(''):'<p style="font-size:12px">Sin correcciones prioritarias según lo medido.</p>';
   const findings=F.length?('<ul style="font-size:12px;margin:4px 0 0 16px">'+F.map(f=>'<li>'+f.txt+'</li>').join('')+'</ul>'):'<p style="font-size:12px">Sin hallazgos.</p>';
+  const concLabel={si:'Sí',parcial:'Parcial',no:'No'}[opts.concordance]||opts.concordance;
+  const clinical=(opts.notes||opts.concordance||opts.adjust)?`
+    <h2>Revisión médica</h2>
+    ${opts.notes?'<p style="font-size:12px"><b>Notas clínicas:</b> '+escapeHtml(opts.notes)+'</p>':''}
+    ${opts.concordance?'<p style="font-size:12px"><b>Concordancia con la evaluación clínica del profesional:</b> '+concLabel+'</p>':''}
+    ${opts.adjust?'<p style="font-size:12px"><b>Ajustes sugeridos por el profesional:</b> '+escapeHtml(opts.adjust)+'</p>':''}`:'';
   $('pdfReport').innerHTML=`
     <h1>CORREXO · Reporte de screening biomecánico</h1>
     <div class="pmeta">Corredor: <b>${runner}</b> · Fecha: ${date}${pro?' · Profesional: <b>'+pro+'</b>':''}</div>
@@ -1382,23 +1390,23 @@ function buildPdf(){
     <table><thead><tr><th>Métrica</th><th>Valor</th><th>Banda</th></tr></thead><tbody>${rows||'<tr><td colspan="3">Sin datos suficientes</td></tr>'}</tbody></table>
     <h2>Plan de coaching por evidencia</h2>
     ${plan}
+    ${clinical}
     <div class="pdisc"><b>Aviso:</b> este reporte es un tamizaje biomecánico automatizado con fines educativos y de coaching, no un diagnóstico médico. Las mediciones provienen de estimación de pose 2D con márgenes de error conocidos y umbrales provisionales. No sustituye la evaluación de un profesional de la salud. Ante dolor, lesión o duda clínica, consultá a un kinesiólogo o médico deportivo.</div>
     <div class="psign"><div>Firma del profesional${pro?': '+pro:''}</div><div>Fecha: ${date}</div></div>`;
   return runner;
 }
-$('pdfBtn').addEventListener('click',()=>{
+function downloadPdf(runner,btn){
   if(typeof html2pdf==='undefined'){ alert('No se pudo cargar el generador de PDF (sin conexión o CDN bloqueado). Reintentá con conexión.'); return; }
-  const btn=$('pdfBtn'), prev=btn.textContent;
-  btn.disabled=true; btn.textContent='Generando PDF…';
-  const runner=buildPdf();
+  const prev=btn?btn.textContent:''; if(btn){ btn.disabled=true; btn.textContent='Generando PDF…'; }
   const node=$('pdfReport');
-  const restore=()=>{ btn.disabled=false; btn.textContent=prev; };
+  const restore=()=>{ if(btn){ btn.disabled=false; btn.textContent=prev; } };
   try{
     const p=html2pdf().set({margin:0,filename:`correxo-reporte-${(runner||'corredor').toLowerCase().replace(/\s+/g,'-')}-${new Date().toISOString().split('T')[0]}.pdf`,image:{type:'jpeg',quality:.97},html2canvas:{scale:2,backgroundColor:'#ffffff'},jsPDF:{orientation:'portrait',unit:'mm',format:'a4'}}).from(node).save();
     if(p&&p.then) p.then(restore).catch(err=>{console.error('PDF err',err);alert('Falló la generación del PDF.');restore();});
     else setTimeout(restore,2500);
   }catch(err){ console.error('PDF err',err); alert('Falló la generación del PDF.'); restore(); }
-});
+}
+$('pdfBtn').addEventListener('click',()=>{ const runner=buildPdf(); downloadPdf(runner,$('pdfBtn')); });
 
 /* ============================================================
    COBRO (Stripe Checkout) + persistencia de estado
@@ -1574,6 +1582,13 @@ function initOperator(){
   $('op-pin').addEventListener('keydown',e=>{ if(e.key==='Enter') opLogin(); });
   $('op-save').addEventListener('click',saveRunner);
   $('op-export').addEventListener('click',opExport);
+  $('op-pdf').addEventListener('click',()=>{
+    if(!viewDone('lat')||!viewDone('rear')){ alert('Faltan las dos vistas analizadas (perfil + espaldas).'); return; }
+    const reg=$('op-docreg').value.trim();
+    const pro=($('op-docname').value.trim()+(reg?' · '+reg:'')).trim();
+    const runner=buildPdf({runner:$('op-name').value.trim()||'—', pro, notes:$('op-notes').value.trim(), concordance:$('op-concord').value, adjust:$('op-adjust').value.trim()});
+    downloadPdf(runner,$('op-pdf'));
+  });
   try{ const saved=sessionStorage.getItem(OPKEY); if(saved) OP_PIN=saved; }catch(e){}
 }
 
