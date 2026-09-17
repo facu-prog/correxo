@@ -1,0 +1,19 @@
+{
+  "name": "correxo-app",
+  "version": "1.1.0",
+  "private": true,
+  "description": "CORREXO — análisis biomecánico de carrera: landing + cobro Stripe + backend de piloto (persistencia de análisis y videos)",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "stripe": "^16.12.0",
+    "pg": "^8.12.0",
+    "multer": "^1.4.5-lts.1"
+  }
+}

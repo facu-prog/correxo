@@ -1,0 +1,1589 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CORREXO · Análisis biomecánico real</title>
+
+<!-- Motor de pose: TensorFlow.js + BlazePose (33 landmarks, incluye pie/talón) -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.11.0/dist/tf-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter@4.11.0/dist/tf-converter.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.11.0/dist/tf-backend-webgl.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3/dist/pose-detection.min.js"></script>
+<!-- Generación de PDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<!-- Tipografía -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg:#0e1117; --surface:#161b24; --surface-2:#1d2430;
+    --ink:#eef1f6; --ink-soft:#c2cad6; --ink-mute:#8b95a5;
+    --line:#262e3b; --line-strong:#333d4d;
+    --accent:#f3743e; --accent-soft:#2a1c14;
+    --blue:#6ea0dc; --blue-soft:#16202e;
+    --good:#5cc295; --good-bg:#12241d;
+    --warn:#d6a53f; --warn-bg:#241e12;
+    --bad:#e07a76; --bad-bg:#271817;
+    --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --display:"Archivo","Inter",-apple-system,sans-serif;
+    --maxw:1180px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1500px;margin:0 auto;padding:0 22px}
+
+  nav{border-bottom:1px solid var(--line);background:linear-gradient(180deg,var(--surface),transparent);position:sticky;top:0;z-index:20;backdrop-filter:blur(8px)}
+  nav .wrap{display:flex;justify-content:space-between;align-items:center;padding:15px 22px;gap:14px;flex-wrap:wrap}
+  .brand{font-weight:750;letter-spacing:-.02em;font-size:1.06rem}
+  .brand b{color:var(--accent)}
+  .phase-tag{font-family:var(--mono);font-size:.64rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-mute);border:1px solid var(--line-strong);border-radius:20px;padding:4px 11px;margin-left:8px}
+  .model-state{font-family:var(--mono);font-size:.72rem;color:var(--ink-mute);display:flex;align-items:center;gap:8px}
+  .model-state .led{width:8px;height:8px;border-radius:50%;background:var(--warn);box-shadow:0 0 8px var(--warn)}
+  .model-state.ready .led{background:var(--good);box-shadow:0 0 8px var(--good)}
+  .model-state.err .led{background:var(--bad);box-shadow:0 0 8px var(--bad)}
+
+  .eyebrow{font-family:var(--mono);font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:600}
+
+  /* tabs */
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:20px 0 0;flex-wrap:wrap}
+  .tab{padding:12px 18px;background:none;border:none;border-bottom:2px solid transparent;color:var(--ink-mute);font-weight:650;font-size:.9rem;cursor:pointer;font-family:var(--sans);transition:.15s}
+  .tab:hover{color:var(--ink-soft)}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+  .tabpane{display:none;padding:24px 0 10px}
+  .tabpane.active{display:block}
+
+  .layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px}
+  @media(max-width:960px){.layout{grid-template-columns:1fr}}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .panel h2{font-size:1.05rem;letter-spacing:-.01em;margin-bottom:4px;display:flex;align-items:center;gap:9px}
+  .panel .hint{font-size:.82rem;color:var(--ink-mute);margin-bottom:16px}
+
+  .drop{border:2px dashed var(--line-strong);border-radius:11px;padding:24px 18px;text-align:center;cursor:pointer;transition:.2s;background:var(--surface-2)}
+  .drop:hover,.drop.drag{border-color:var(--accent);background:var(--accent-soft)}
+  .drop .big{font-size:1rem;margin-bottom:5px}
+  .drop .small{font-size:.78rem;color:var(--ink-mute);font-family:var(--mono)}
+  input[type=file]{display:none}
+
+  .video-box{position:relative;background:#000;border-radius:11px;overflow:hidden;aspect-ratio:16/9;margin-top:16px;display:none}
+  .video-box.show{display:block}
+  video{width:100%;height:100%;object-fit:contain;display:block}
+  canvas.overlay{position:absolute;inset:0;width:100%;height:100%}
+  .vbadge{position:absolute;top:10px;left:10px;font-family:var(--mono);font-size:.66rem;letter-spacing:.12em;background:rgba(14,17,23,.8);border:1px solid var(--line-strong);padding:4px 10px;border-radius:6px;z-index:3}
+
+  .fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+  .field label{display:block;font-family:var(--mono);font-size:.64rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-mute);margin-bottom:6px}
+  .field input,.field select{width:100%;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:8px;padding:9px 11px;color:var(--ink);font-family:var(--sans);font-size:.9rem}
+  .field input:focus,.field select:focus{outline:none;border-color:var(--accent)}
+
+  .controls{display:flex;gap:10px;margin-top:16px}
+  .btn{flex:1;padding:12px;border:none;border-radius:9px;font-weight:650;cursor:pointer;font-size:.9rem;transition:.2s;font-family:var(--sans)}
+  .btn-primary{background:var(--accent);color:#1a0f08}
+  .btn-primary:hover:not(:disabled){filter:brightness(1.08)}
+  .btn-secondary{background:var(--surface-2);color:var(--ink-soft);border:1px solid var(--line-strong);flex:0 0 auto;padding:12px 16px}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+
+  .prog{margin-top:14px;display:none}
+  .prog.show{display:block}
+  .prog-track{height:5px;background:var(--surface-2);border-radius:3px;overflow:hidden}
+  .prog-fill{height:100%;width:0;background:var(--accent);transition:width .15s}
+  .prog-meta{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.7rem;color:var(--ink-mute);margin-top:7px}
+
+  .empty{color:var(--ink-mute);text-align:center;padding:40px 16px;font-size:.9rem}
+  .empty .big{font-size:2rem;margin-bottom:10px;opacity:.5}
+  .results{display:none}
+  .results.show{display:block}
+
+  .quality{border-radius:11px;padding:15px 16px;margin-bottom:18px;border:1px solid var(--line-strong)}
+  .quality.q-good{background:var(--good-bg)} .quality.q-mid{background:var(--warn-bg)} .quality.q-bad{background:var(--bad-bg)}
+  .quality .qhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+  .quality .qlabel{font-family:var(--mono);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mute)}
+  .quality .qval{font-weight:750;font-size:1.02rem}
+  .quality.q-good .qval{color:var(--good)} .quality.q-mid .qval{color:var(--warn)} .quality.q-bad .qval{color:var(--bad)}
+  .qstats{display:flex;flex-wrap:wrap;gap:6px 16px;font-family:var(--mono);font-size:.72rem;color:var(--ink-soft)}
+  .qstats b{color:var(--ink)}
+  .qwarn{margin-top:10px;font-size:.82rem;color:var(--ink-soft);border-top:1px dashed var(--line-strong);padding-top:9px}
+  .qwarn ul{list-style:none;margin-top:4px}
+  .qwarn li{padding-left:16px;position:relative;margin-bottom:3px}
+  .qwarn li::before{content:"!";position:absolute;left:0;color:var(--warn);font-family:var(--mono);font-weight:700}
+
+  .metric{background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--line-strong);border-radius:10px;padding:16px;margin-bottom:13px}
+  .metric.b-good{border-left-color:var(--good)} .metric.b-warn{border-left-color:var(--warn)} .metric.b-bad{border-left-color:var(--bad)}
+  .metric .top{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+  .metric .name{font-weight:700;font-size:.98rem}
+  .metric .conf{font-family:var(--mono);font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-mute);white-space:nowrap}
+  .metric .readout{display:flex;align-items:baseline;gap:10px;margin:9px 0 4px;flex-wrap:wrap}
+  .metric .val{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:2rem;font-weight:700;letter-spacing:-.02em}
+  .metric.b-good .val{color:var(--good)} .metric.b-warn .val{color:var(--warn)} .metric.b-bad .val{color:var(--bad)}
+  .metric .unit{font-family:var(--mono);font-size:.82rem;color:var(--ink-mute)}
+  .band{display:inline-block;font-family:var(--mono);font-size:.66rem;font-weight:600;letter-spacing:.04em;padding:3px 9px;border-radius:20px}
+  .band.b-good{background:var(--good-bg);color:var(--good)} .band.b-warn{background:var(--warn-bg);color:var(--warn)} .band.b-bad{background:var(--bad-bg);color:var(--bad)}
+  .metric .desc{font-size:.82rem;color:var(--ink-soft);margin-top:8px}
+  .metric .ref{font-family:var(--mono);font-size:.7rem;color:var(--ink-mute);margin-top:7px}
+
+  .disclaimer{margin-top:6px;background:var(--blue-soft);border:1px solid color-mix(in srgb,var(--blue) 35%,transparent);border-radius:10px;padding:14px 15px;font-size:.8rem;color:var(--ink-soft)}
+  .disclaimer .eyebrow{color:var(--blue);display:block;margin-bottom:6px}
+
+  /* resumen */
+  .sum-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  @media(max-width:960px){.sum-grid{grid-template-columns:1fr}}
+  .scorecard{background:linear-gradient(135deg,var(--surface-2),var(--surface));border:1px solid var(--line);border-radius:14px;padding:22px;text-align:center;margin-bottom:18px}
+  .scorecard .big{font-family:var(--mono);font-size:3rem;font-weight:750;letter-spacing:-.03em}
+  .scorecard .lab{font-family:var(--mono);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-mute);margin-top:2px}
+  .scorecard .sub{color:var(--ink-soft);font-size:.86rem;margin-top:8px}
+  .view-status{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+  .vs-row{display:flex;align-items:center;gap:10px;font-size:.9rem;color:var(--ink-mute);background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:10px 13px}
+  .vs-row.ok{color:var(--ink)}
+  .vs-ic{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:.78rem;background:var(--surface);border:1px solid var(--line-strong);color:var(--ink-mute);flex:none}
+  .vs-row.ok .vs-ic{background:var(--good-bg);color:var(--good);border-color:transparent}
+  .vs-tag{margin-left:auto;font-family:var(--mono);font-size:.64rem;letter-spacing:.06em;text-transform:uppercase}
+  .vs-row.ok .vs-tag{color:var(--good)}
+  .findings{list-style:none}
+  .findings li{background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--line-strong);border-radius:9px;padding:12px 14px;margin-bottom:9px;font-size:.86rem;color:var(--ink-soft)}
+  .findings li.f-bad{border-left-color:var(--bad)} .findings li.f-warn{border-left-color:var(--warn)} .findings li.f-good{border-left-color:var(--good)}
+  .findings li b{color:var(--ink)}
+  .exercise{background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:9px;padding:13px 15px;margin-bottom:10px}
+  .exercise h4{font-size:.92rem;margin-bottom:4px}
+  .exercise .tgt{font-family:var(--mono);font-size:.64rem;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+  .exercise p{font-size:.82rem;color:var(--ink-soft);margin-top:5px}
+  .exercise .ev{font-family:var(--mono);font-size:.68rem;color:var(--ink-mute);margin-top:6px}
+
+  .report-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+  @media(max-width:600px){.report-fields,.fields{grid-template-columns:1fr}}
+
+  .foot{border-top:1px solid var(--line);padding:22px 0 40px;color:var(--ink-mute);font-size:.78rem}
+  .foot .mono{font-family:var(--mono)}
+  details{margin-top:10px}
+  summary{cursor:pointer;font-family:var(--mono);font-size:.74rem;color:var(--ink-mute)}
+  details p{font-size:.8rem;margin-top:8px;color:var(--ink-soft)}
+
+  /* PDF (oculto en pantalla) */
+  #pdfReport{position:fixed;left:-9999px;top:0;width:794px;background:#fff;color:#1a1f2b;padding:44px;font-family:var(--sans)}
+  #pdfReport h1{font-size:22px;color:#c0451c;margin-bottom:4px}
+  #pdfReport h2{font-size:15px;color:#2f5f9e;border-bottom:2px solid #e6e9ef;padding-bottom:5px;margin:22px 0 12px}
+  #pdfReport .pmeta{font-size:12px;color:#5b6472}
+  #pdfReport table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px}
+  #pdfReport th,#pdfReport td{text-align:left;padding:7px 9px;border-bottom:1px solid #e6e9ef}
+  #pdfReport th{background:#f4f6fa;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#5b6472}
+  #pdfReport .pb-good{color:#1f7a54;font-weight:700} #pdfReport .pb-warn{color:#9a6a12;font-weight:700} #pdfReport .pb-bad{color:#a6413d;font-weight:700}
+  #pdfReport .pex{border-left:3px solid #c0451c;padding:6px 10px;margin-bottom:7px;font-size:12px;background:#faf7f5}
+  #pdfReport .pdisc{font-size:10.5px;color:#5b6472;background:#f4f6fa;border-radius:6px;padding:10px 12px;margin-top:14px;line-height:1.5}
+  #pdfReport .psign{margin-top:26px;display:flex;justify-content:space-between;font-size:12px;color:#5b6472}
+  #pdfReport .psign div{border-top:1px solid #99a2b0;padding-top:6px;width:45%}
+
+  .btn-retry{background:var(--surface-2);border:1px solid var(--line-strong);color:var(--ink-soft);font-family:var(--mono);font-size:.7rem;padding:4px 10px;border-radius:6px;cursor:pointer}
+  .btn-retry:hover{border-color:var(--accent);color:var(--ink)}
+  .videoerr{margin-top:12px;background:var(--bad-bg);border:1px solid color-mix(in srgb,var(--bad) 45%,transparent);border-radius:9px;padding:11px 13px;font-size:.82rem;color:var(--ink-soft);display:none}
+  .videoerr.show{display:block}
+  a:focus-visible,button:focus-visible,[tabindex]:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+
+  /* ============ LANDING / VENTA ============ */
+  h1,h2,h3,h4,.display{font-family:var(--display)}
+  .site-nav{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+  .site-nav .inner{max-width:var(--maxw);margin:0 auto;padding:14px 22px;display:flex;align-items:center;justify-content:space-between;gap:18px}
+  .site-nav .logo{font-family:var(--display);font-weight:800;font-size:1.15rem;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
+  .site-nav .logo b{color:var(--accent)}
+  .site-nav .navlinks{display:flex;gap:26px;align-items:center}
+  .site-nav .navlinks a{color:var(--ink-soft);text-decoration:none;font-size:.9rem;font-weight:500}
+  .site-nav .navlinks a:hover{color:var(--ink)}
+  @media(max-width:820px){.site-nav .navlinks a:not(.nav-cta){display:none}}
+  .nav-cta{background:var(--accent);color:#1a0f08!important;padding:9px 16px;border-radius:8px;font-weight:600;font-size:.86rem}
+  .nav-cta:hover{filter:brightness(1.08)}
+
+  .section{max-width:var(--maxw);margin:0 auto;padding:76px 22px}
+  .section.tight{padding-top:40px}
+  .kicker{font-family:var(--mono);font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:14px}
+  .sec-title{font-size:clamp(1.7rem,1.2rem+2vw,2.5rem);font-weight:800;letter-spacing:-.03em;line-height:1.08;text-wrap:balance;margin-bottom:14px}
+  .sec-lead{color:var(--ink-soft);font-size:1.06rem;max-width:60ch}
+
+  /* hero */
+  .hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line);
+    background:radial-gradient(90% 120% at 88% -10%,color-mix(in srgb,var(--accent) 20%,transparent) 0%,transparent 42%),radial-gradient(70% 90% at 0% 110%,color-mix(in srgb,var(--blue) 16%,transparent) 0%,transparent 45%)}
+  .hero .inner{max-width:var(--maxw);margin:0 auto;padding:64px 22px 72px;display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center}
+  @media(max-width:900px){.hero .inner{grid-template-columns:1fr;gap:30px;padding-top:44px}}
+  .hero h1{font-size:clamp(2.4rem,1.5rem+4.2vw,4rem);font-weight:900;letter-spacing:-.045em;line-height:1.02;text-wrap:balance}
+  .hero h1 .hl{color:var(--accent)}
+  .hero .sub{color:var(--ink-soft);font-size:1.16rem;margin:20px 0 28px;max-width:52ch;line-height:1.55}
+  .hero .cta-row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .btn-lg{padding:15px 26px;border-radius:10px;font-weight:700;font-size:1rem;font-family:var(--sans);border:none;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:8px;transition:.2s}
+  .btn-fill{background:var(--accent);color:#1a0f08}
+  .btn-fill:hover{filter:brightness(1.08);transform:translateY(-1px)}
+  .btn-ghost{background:transparent;color:var(--ink);border:1px solid var(--line-strong)}
+  .btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+  .hero .trust{margin-top:22px;display:flex;gap:8px 20px;flex-wrap:wrap;font-family:var(--mono);font-size:.74rem;color:var(--ink-mute)}
+  .hero .trust span{display:flex;align-items:center;gap:7px}
+  .hero .trust .tick{color:var(--good)}
+  .hero-visual{position:relative;background:linear-gradient(160deg,var(--surface),var(--surface-2));border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 30px 70px -30px rgba(0,0,0,.6)}
+  .hero-visual svg{width:100%;height:auto;display:block}
+  .hero-visual .cap{position:absolute;bottom:16px;left:16px;right:16px;font-family:var(--mono);font-size:.68rem;color:var(--ink-mute);display:flex;justify-content:space-between}
+
+  /* franja de métricas bajo hero */
+  .metricstrip{border-bottom:1px solid var(--line);background:var(--surface)}
+  .metricstrip .inner{max-width:var(--maxw);margin:0 auto;padding:22px;display:flex;gap:14px 36px;flex-wrap:wrap;justify-content:center;font-family:var(--mono);font-size:.82rem;color:var(--ink-soft)}
+  .metricstrip b{color:var(--accent)}
+
+  /* pasos */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:34px}
+  @media(max-width:820px){.steps{grid-template-columns:1fr}}
+  .step{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:24px}
+  .step .num{font-family:var(--mono);font-size:.8rem;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);width:34px;height:34px;border-radius:9px;display:grid;place-items:center;font-weight:600;margin-bottom:14px}
+  .step h3{font-size:1.12rem;margin-bottom:7px;letter-spacing:-.01em}
+  .step p{color:var(--ink-soft);font-size:.92rem}
+
+  /* grid de features/métricas */
+  .feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:34px}
+  @media(max-width:900px){.feat-grid{grid-template-columns:1fr 1fr}}
+  @media(max-width:600px){.feat-grid{grid-template-columns:1fr}}
+  .feat{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:20px;display:flex;flex-direction:column;align-items:flex-start}
+  .feat .ev{display:inline-block;font-family:var(--mono);font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:20px;margin-bottom:11px}
+  .ev.e-strong{background:var(--good-bg);color:var(--good)} .ev.e-mid{background:var(--warn-bg);color:var(--warn)}
+  .feat h4{font-size:1.02rem;margin-bottom:8px;letter-spacing:-.01em}
+  .feat p{color:var(--ink-soft);font-size:.88rem}
+  .feat .view{font-family:var(--mono);font-size:.68rem;color:var(--ink-mute);margin-top:10px}
+
+  /* ciencia */
+  .science{background:var(--surface);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .sci-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:30px}
+  @media(max-width:820px){.sci-grid{grid-template-columns:1fr}}
+  .sci{border-left:3px solid var(--blue);padding:6px 0 6px 18px}
+  .sci h4{font-size:1.02rem;margin-bottom:6px}
+  .sci p{color:var(--ink-soft);font-size:.9rem}
+  .sci-refs{margin-top:26px;font-family:var(--mono);font-size:.72rem;color:var(--ink-mute);line-height:1.7}
+  .sci-refs a{color:var(--ink-soft)}
+
+  /* app embed */
+  .app-embed{max-width:var(--maxw);margin:0 auto;padding:8px 22px 30px}
+  .app-embed .model-state{justify-content:flex-end;margin-bottom:6px}
+
+  /* pricing */
+  .pricing .inner{max-width:var(--maxw);margin:0 auto;padding:0 22px}
+  .price-card{max-width:440px;margin:34px auto 0;background:linear-gradient(160deg,var(--surface),var(--surface-2));border:1px solid var(--line-strong);border-radius:18px;padding:30px;text-align:center;box-shadow:0 30px 70px -34px rgba(0,0,0,.6)}
+  .price-card .tag{font-family:var(--mono);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:12px}
+  .price-card .amount{font-family:var(--display);font-size:2.6rem;font-weight:800;letter-spacing:-.03em}
+  .price-card .amount small{font-size:1rem;color:var(--ink-mute);font-weight:500}
+  .price-card ul{list-style:none;text-align:left;margin:20px 0 24px}
+  .price-card li{padding-left:26px;position:relative;margin-bottom:10px;color:var(--ink-soft);font-size:.92rem}
+  .price-card li::before{content:"✓";position:absolute;left:0;color:var(--good);font-weight:700}
+  .price-card .note{font-family:var(--mono);font-size:.68rem;color:var(--ink-mute);margin-top:14px}
+
+  /* B2B / pro */
+  .pro-band{background:linear-gradient(120deg,color-mix(in srgb,var(--blue) 16%,var(--surface)),var(--surface));border:1px solid var(--line);border-radius:18px;padding:34px;display:grid;grid-template-columns:1.3fr 1fr;gap:26px;align-items:center}
+  @media(max-width:820px){.pro-band{grid-template-columns:1fr}}
+  .pro-band h3{font-size:1.5rem;letter-spacing:-.02em;margin-bottom:10px}
+  .pro-band p{color:var(--ink-soft);font-size:.96rem}
+
+  /* testimonios (slots reales a completar) */
+  .testi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:30px}
+  @media(max-width:820px){.testi-grid{grid-template-columns:1fr}}
+  .testi{background:var(--surface);border:1px dashed var(--line-strong);border-radius:13px;padding:20px}
+  .testi p{color:var(--ink-soft);font-size:.92rem;font-style:italic}
+  .testi .who{margin-top:14px;font-family:var(--mono);font-size:.72rem;color:var(--ink-mute)}
+  .testi .slot{font-family:var(--mono);font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--warn);margin-bottom:10px}
+
+  /* CTA final + footer */
+  .cta-final{text-align:center;background:radial-gradient(80% 130% at 50% 0%,color-mix(in srgb,var(--accent) 16%,transparent),transparent 60%)}
+  .cta-final h2{font-size:clamp(1.9rem,1.3rem+2.6vw,2.9rem);font-weight:900;letter-spacing:-.03em;margin-bottom:16px;text-wrap:balance}
+  .site-foot{border-top:1px solid var(--line);background:var(--surface)}
+  .site-foot .inner{max-width:var(--maxw);margin:0 auto;padding:34px 22px;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;font-size:.82rem;color:var(--ink-mute)}
+  .site-foot a{color:var(--ink-soft);text-decoration:none}
+  .site-foot .disc{max-width:60ch;font-size:.76rem;line-height:1.6}
+
+  /* pulido de interacción */
+  .step,.feat,.price-card{transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease}
+  .step:hover,.feat:hover{transform:translateY(-3px);border-color:var(--line-strong)}
+  .btn-lg,.nav-cta{transition:transform .18s ease,filter .18s ease,border-color .18s ease,color .18s ease}
+  @keyframes heroIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+  .hero .inner>div>*{animation:heroIn .7s cubic-bezier(.2,.7,.2,1) both}
+  .hero .inner>div>*:nth-child(2){animation-delay:.06s}
+  .hero .inner>div>*:nth-child(3){animation-delay:.12s}
+  .hero .inner>div>*:nth-child(4){animation-delay:.18s}
+  .hero-visual{animation:heroIn .8s cubic-bezier(.2,.7,.2,1) .1s both}
+  @media (prefers-reduced-motion: reduce){.hero .inner>div>*,.hero-visual{animation:none}}
+
+  /* media real */
+  .hero-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;opacity:.26;filter:saturate(.92)}
+  .hero-scrim{position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,color-mix(in srgb,var(--bg) 50%,transparent),color-mix(in srgb,var(--bg) 82%,transparent))}
+  .hero .inner{position:relative;z-index:2}
+  .vb-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:34px}
+  @media(max-width:820px){.vb-grid{grid-template-columns:1fr}}
+  .vb-item{position:relative;border-radius:14px;overflow:hidden;border:1px solid var(--line);aspect-ratio:4/5;background:var(--surface-2)}
+  .vb-item img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .45s ease}
+  .vb-item:hover img{transform:scale(1.045)}
+  .vb-cap{position:absolute;left:0;right:0;bottom:0;padding:16px;background:linear-gradient(0deg,rgba(8,10,14,.92),rgba(8,10,14,.2) 70%,transparent);font-family:var(--mono);font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft)}
+  .vb-cap b{color:var(--accent)}
+  .pro-photo{border-radius:14px;overflow:hidden;border:1px solid var(--line);aspect-ratio:16/11;background:var(--surface-2)}
+  .pro-photo img{width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(.15)}
+
+  /* foto real con overlay de pose (hero + mockups) */
+  .hv-photo{padding:0;overflow:hidden;position:relative;aspect-ratio:1200/787}
+  .hv-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+  .hv-skel{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  .hv-photo .cap{position:absolute;left:16px;right:16px;bottom:14px;z-index:3}
+  .abadge text{font-family:var(--mono);font-weight:600}
+
+  /* ===== mockups de dispositivo (franja "el producto en acción") ===== */
+  .device-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:28px 18px;margin-top:44px;align-items:end}
+  @media(max-width:1000px){.device-strip{grid-template-columns:repeat(2,1fr);max-width:640px;margin-left:auto;margin-right:auto}}
+  @media(max-width:560px){.device-strip{grid-template-columns:1fr;max-width:330px}}
+  .device{display:flex;flex-direction:column;align-items:center}
+  .device.lift{transform:translateY(-22px)}
+  @media(max-width:1000px){.device.lift{transform:none}}
+  .phone{position:relative;width:100%;max-width:280px;border-radius:38px;padding:11px;
+    background:linear-gradient(160deg,#252c37,#0b0e13 60%);border:1px solid var(--line-strong);
+    box-shadow:0 44px 84px -40px rgba(0,0,0,.85),inset 0 1px 0 rgba(255,255,255,.06),inset 0 0 0 2px rgba(0,0,0,.4)}
+  .phone .screen{position:relative;border-radius:29px;overflow:hidden;background:var(--bg);aspect-ratio:9/19.3}
+  .phone .notch{position:absolute;top:9px;left:50%;transform:translateX(-50%);width:34%;height:22px;background:#0b0e13;border-radius:14px;z-index:8}
+  .phone .side{position:absolute;top:120px;width:3px;height:52px;border-radius:2px;background:#2b333f}
+  .phone .side.l{left:-4px} .phone .side.r{right:-4px;height:74px;top:150px}
+  .device-cap{margin-top:20px;text-align:center;max-width:280px}
+  .device-cap .n{font-family:var(--mono);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:600}
+  .device-cap h4{font-family:var(--display);font-size:1.12rem;letter-spacing:-.01em;margin:7px 0 5px}
+  .device-cap p{color:var(--ink-soft);font-size:.85rem;line-height:1.5}
+
+  /* pantalla 1 · captura en vivo */
+  .scr-track{position:absolute;inset:0}
+  .scr-track img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .scr-track .grad{position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,10,14,.55),transparent 26% 60%,rgba(8,10,14,.82))}
+  .scr-top{position:absolute;top:30px;left:12px;right:12px;z-index:6;display:flex;justify-content:space-between;align-items:center}
+  .rec{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:.62rem;color:#fff;background:rgba(14,17,23,.7);border:1px solid var(--line-strong);padding:4px 10px;border-radius:20px;backdrop-filter:blur(4px)}
+  .rec .d{width:7px;height:7px;border-radius:50%;background:var(--bad);box-shadow:0 0 8px var(--bad)}
+  .live-tag{font-family:var(--mono);font-size:.56rem;letter-spacing:.14em;color:var(--good);background:rgba(14,17,23,.7);border:1px solid var(--line-strong);padding:4px 9px;border-radius:20px}
+  .scr-chips{position:absolute;left:12px;right:12px;bottom:14px;z-index:6;display:flex;gap:6px;flex-wrap:wrap}
+  .scr-chips .chip{font-family:var(--mono);font-size:.58rem;color:var(--ink-soft);background:rgba(14,17,23,.74);border:1px solid var(--line-strong);padding:5px 9px;border-radius:8px;backdrop-filter:blur(4px)}
+  .scr-chips .chip b{color:var(--accent);font-weight:600}
+  .scr-chips .chip.g b{color:var(--good)}
+
+  /* pantalla 2 y 3 · UI de app */
+  .scr-app{position:absolute;inset:0;padding:36px 13px 15px;display:flex;flex-direction:column;gap:8px;background:var(--bg);overflow:hidden}
+  .scr-app .aph{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px}
+  .scr-app .aph .t{font-family:var(--display);font-weight:700;font-size:.9rem}
+  .scr-app .aph .s{font-family:var(--mono);font-size:.5rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mute)}
+  .mmetric{background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--line-strong);border-radius:9px;padding:9px 11px}
+  .mmetric.b-good{border-left-color:var(--good)} .mmetric.b-warn{border-left-color:var(--warn)} .mmetric.b-bad{border-left-color:var(--bad)}
+  .mmetric .r1{display:flex;justify-content:space-between;align-items:center}
+  .mmetric .nm{font-size:.72rem;font-weight:650;color:var(--ink)}
+  .mband{font-family:var(--mono);font-size:.5rem;font-weight:600;padding:2px 7px;border-radius:20px}
+  .mband.b-good{background:var(--good-bg);color:var(--good)} .mband.b-warn{background:var(--warn-bg);color:var(--warn)} .mband.b-bad{background:var(--bad-bg);color:var(--bad)}
+  .mmetric .r2{display:flex;align-items:baseline;gap:5px;margin-top:2px}
+  .mmetric .vv{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:1.18rem;font-weight:700;letter-spacing:-.02em}
+  .mmetric.b-good .vv{color:var(--good)} .mmetric.b-warn .vv{color:var(--warn)} .mmetric.b-bad .vv{color:var(--bad)}
+  .mmetric .uu{font-family:var(--mono);font-size:.58rem;color:var(--ink-mute)}
+  .mmetric .bar{height:4px;border-radius:3px;background:var(--surface);margin-top:7px;overflow:hidden}
+  .mmetric .bar i{display:block;height:100%;border-radius:3px}
+  .mmetric.b-good .bar i{background:var(--good)} .mmetric.b-warn .bar i{background:var(--warn)} .mmetric.b-bad .bar i{background:var(--bad)}
+  .mscore{background:linear-gradient(135deg,var(--surface-2),var(--surface));border:1px solid var(--line);border-radius:12px;padding:13px;text-align:center}
+  .mscore .b{font-family:var(--mono);font-size:1.9rem;font-weight:750;letter-spacing:-.03em;color:var(--accent);line-height:1}
+  .mscore .l{font-family:var(--mono);font-size:.5rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-mute);margin-top:3px}
+  .mfind{display:flex;gap:7px;align-items:flex-start;background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--line-strong);border-radius:8px;padding:7px 9px;font-size:.64rem;color:var(--ink-soft);line-height:1.35}
+  .mfind.b-warn{border-left-color:var(--warn)} .mfind.b-good{border-left-color:var(--good)} .mfind.b-bad{border-left-color:var(--bad)}
+  .mfind .dot{flex:0 0 auto;width:6px;height:6px;border-radius:50%;margin-top:4px}
+  .mfind.b-warn .dot{background:var(--warn)} .mfind.b-good .dot{background:var(--good)} .mfind.b-bad .dot{background:var(--bad)}
+  .mfind b{color:var(--ink)}
+  .mplan{background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:8px;padding:8px 10px}
+  .mplan .pt{font-family:var(--mono);font-size:.48rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+  .mplan .ph{font-size:.72rem;font-weight:650;margin:2px 0}
+  .mplan .pp{font-size:.6rem;color:var(--ink-soft);line-height:1.4}
+  .scr-app .abtn{margin-top:auto;background:var(--accent);color:#1a0f08;text-align:center;font-weight:700;font-size:.72rem;padding:9px;border-radius:9px}
+  /* operador (piloto) */
+  .field textarea{width:100%;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:8px;padding:9px 11px;color:var(--ink);font-family:var(--sans);font-size:.9rem;resize:vertical}
+  .field textarea:focus{outline:none;border-color:var(--accent)}
+  .op-item{display:flex;align-items:center;gap:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:8px}
+  .op-item .oi-main{flex:1;min-width:0}
+  .op-item .oi-main b{color:var(--ink);font-size:.9rem}
+  .op-item .oi-sub{font-family:var(--mono);font-size:.66rem;color:var(--ink-mute);margin-top:2px}
+  .oi-conc-si{color:var(--good)} .oi-conc-parcial{color:var(--warn)} .oi-conc-no{color:var(--bad)}
+  .op-item .oi-del{background:none;border:1px solid var(--line-strong);color:var(--ink-mute);border-radius:6px;padding:5px 9px;cursor:pointer;font-size:.72rem;flex:none}
+  .op-item .oi-del:hover{border-color:var(--bad);color:var(--bad)}
+</style>
+</head>
+<body>
+<!-- ============ NAV ============ -->
+<header class="site-nav">
+  <div class="inner">
+    <a href="#top" class="logo" style="text-decoration:none;color:inherit">📊 <b>CORREXO</b></a>
+    <nav class="navlinks">
+      <a href="#como">Cómo funciona</a>
+      <a href="#mide">Qué mide</a>
+      <a href="#ciencia">Ciencia</a>
+      <a href="#precio">Precio</a>
+      <a href="#analizar" class="nav-cta">Analizar mi carrera</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ============ HERO ============ -->
+<section class="hero" id="top">
+  <video class="hero-bg" autoplay muted loop playsinline preload="metadata"
+    poster="https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=1600&amp;q=80">
+    <source src="https://videos.pexels.com/video-files/2519660/2519660-hd_1920_1080_24fps.mp4" type="video/mp4">
+  </video>
+  <div class="hero-scrim"></div>
+  <div class="inner">
+    <div>
+      <div class="kicker">Análisis biomecánico de carrera · Trail</div>
+      <h1>Corré mejor con datos de <span class="hl">nivel laboratorio</span>, desde tu teléfono.</h1>
+      <p class="sub">Filmá una corrida de perfil y de espaldas. En segundos, CORREXO mide lo que de verdad se asocia a lesiones —cadencia, oscilación, overstride, caída pélvica— y te devuelve un plan. Sin laboratorio, sin sensores.</p>
+      <div class="cta-row">
+        <a href="#analizar" class="btn-lg btn-fill">Analizar mi carrera →</a>
+        <a href="#como" class="btn-lg btn-ghost">Ver cómo funciona</a>
+      </div>
+      <div class="trust">
+        <span><span class="tick">✓</span> Sin lab ni sensores</span>
+        <span><span class="tick">✓</span> Fundado en evidencia citada</span>
+        <span><span class="tick">✓</span> Validable por un profesional</span>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="hv-photo">
+        <img src="https://images.unsplash.com/photo-1594882645126-14020914d58d?w=1200&amp;q=80" alt="Corredora de perfil analizada por CORREXO al atardecer">
+        <svg class="hv-skel" viewBox="0 0 1200 787" preserveAspectRatio="none" role="img" aria-label="Esqueleto de pose de CORREXO alineado sobre la corredora">
+          <defs>
+            <linearGradient id="gline" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#6ea0dc"/><stop offset="1" stop-color="#aecdf1"/>
+            </linearGradient>
+          </defs>
+          <!-- huesos -->
+          <g stroke="url(#gline)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity=".95">
+            <!-- tronco -->
+            <line x1="618" y1="190" x2="628" y2="292"/>
+            <!-- cuello -->
+            <line x1="632" y1="133" x2="618" y2="190"/>
+            <!-- brazo adelante (flexionado, puño arriba) -->
+            <line x1="618" y1="190" x2="650" y2="246"/><line x1="650" y1="246" x2="588" y2="214"/>
+            <!-- brazo atras -->
+            <line x1="618" y1="190" x2="694" y2="230"/><line x1="694" y1="230" x2="668" y2="272"/>
+            <!-- pierna de apoyo (adelante/izquierda) -->
+            <line x1="628" y1="292" x2="560" y2="380"/><line x1="560" y1="380" x2="546" y2="450"/><line x1="546" y1="450" x2="512" y2="464"/>
+            <!-- pierna de impulso (atras/derecha) -->
+            <line x1="628" y1="292" x2="674" y2="372"/><line x1="674" y1="372" x2="720" y2="432"/><line x1="720" y1="432" x2="742" y2="444"/>
+          </g>
+          <!-- cabeza (nodo de pose, no monigote) -->
+          <circle cx="633" cy="120" r="12" fill="#dbe9fb" stroke="#6ea0dc" stroke-width="2.5"/>
+          <!-- arcos de medicion -->
+          <path d="M 596 402 A 42 42 0 0 0 588 442" fill="none" stroke="#6ea0dc" stroke-width="4"/>
+          <path d="M 664 336 A 46 46 0 0 1 706 356" fill="none" stroke="#6ea0dc" stroke-width="4"/>
+          <!-- keypoints -->
+          <g fill="#dbe9fb" stroke="#6ea0dc" stroke-width="2.5">
+            <circle cx="618" cy="190" r="8"/><circle cx="628" cy="292" r="9"/>
+            <circle cx="650" cy="246" r="7"/><circle cx="588" cy="214" r="7"/>
+            <circle cx="694" cy="230" r="7"/><circle cx="668" cy="272" r="7"/>
+            <circle cx="560" cy="380" r="8"/><circle cx="546" cy="450" r="7"/><circle cx="512" cy="464" r="6"/>
+            <circle cx="674" cy="372" r="8"/><circle cx="720" cy="432" r="7"/><circle cx="742" cy="444" r="6"/>
+          </g>
+          <!-- badges de angulo -->
+          <g class="abadge">
+            <line x1="560" y1="380" x2="392" y2="372" stroke="#f3743e" stroke-width="2" stroke-dasharray="4 5" opacity=".8"/>
+            <rect x="212" y="346" width="180" height="52" rx="10" fill="#161b24" stroke="#333d4d"/>
+            <circle cx="234" cy="372" r="5" fill="#5cc295"/>
+            <text x="250" y="367" fill="#8b95a5" font-size="15" letter-spacing="1.5">RODILLA</text>
+            <text x="250" y="388" fill="#5cc295" font-size="20">141°</text>
+            <text x="330" y="388" fill="#5cc295" font-size="12">en rango</text>
+          </g>
+          <g class="abadge">
+            <line x1="640" y1="292" x2="808" y2="270" stroke="#f3743e" stroke-width="2" stroke-dasharray="4 5" opacity=".8"/>
+            <rect x="808" y="244" width="172" height="52" rx="10" fill="#161b24" stroke="#333d4d"/>
+            <circle cx="830" cy="270" r="5" fill="#f3743e"/>
+            <text x="846" y="265" fill="#8b95a5" font-size="15" letter-spacing="1.5">CADERA</text>
+            <text x="846" y="286" fill="#f3743e" font-size="20">43°</text>
+            <text x="912" y="286" fill="#8b95a5" font-size="12">flexión</text>
+          </g>
+          <g class="abadge">
+            <line x1="720" y1="432" x2="828" y2="452" stroke="#f3743e" stroke-width="2" stroke-dasharray="4 5" opacity=".8"/>
+            <rect x="828" y="428" width="176" height="52" rx="10" fill="#161b24" stroke="#333d4d"/>
+            <circle cx="850" cy="454" r="5" fill="#d6a53f"/>
+            <text x="866" y="449" fill="#8b95a5" font-size="15" letter-spacing="1.5">DESPEGUE</text>
+            <text x="866" y="470" fill="#d6a53f" font-size="20">98°</text>
+          </g>
+        </svg>
+        <div class="cap"><span>POSE · 33 landmarks</span><span style="color:var(--accent)">● CADENCIA 176 spm</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- franja de métricas -->
+<div class="metricstrip"><div class="inner">
+  <span><b>Cadencia</b></span><span><b>Oscilación vertical</b></span><span><b>Overstride</b></span><span><b>Caída pélvica</b></span><span><b>Valgo dinámico</b></span>
+</div></div>
+
+<!-- ============ FRANJA VISUAL — PRODUCTO EN ACCIÓN ============ -->
+<section class="section tight">
+  <div class="kicker">El producto en acción</div>
+  <h2 class="sec-title">Filmás. Medís. Recibís el plan.</h2>
+  <p class="sec-lead">Todo en tu teléfono, en <b>dos tomas</b> —de perfil y de espaldas—. La cámara sigue tu cuerpo cuadro por cuadro, mide las variables que importan y las devuelve en bandas claras con un plan por evidencia.</p>
+  <div class="device-strip">
+
+    <!-- 1 · CAPTURA -->
+    <div class="device">
+      <div class="phone">
+        <div class="notch"></div><span class="side l"></span><span class="side r"></span>
+        <div class="screen">
+          <div class="scr-track">
+            <img loading="lazy" src="https://images.unsplash.com/photo-1594882645126-14020914d58d?w=900&amp;q=80" alt="CORREXO siguiendo a una corredora en vivo" style="object-position:50% 50%">
+            <div class="grad"></div>
+            <svg viewBox="0 0 270 470" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%;z-index:5;pointer-events:none">
+              <!-- caja de deteccion -->
+              <g stroke="#f3743e" stroke-width="2" fill="none" opacity=".85">
+                <path d="M112 62 h-16 v16"/><path d="M198 62 h16 v16"/>
+                <path d="M112 288 h-16 v-16"/><path d="M198 288 h16 v-16"/>
+              </g>
+              <!-- esqueleto alineado a la corredora (recorte cover 1200x787 -> 270x470) -->
+              <g stroke="#6ea0dc" stroke-width="3" stroke-linecap="round" fill="none" opacity=".95">
+                <line x1="155" y1="80" x2="146" y2="113"/>
+                <line x1="146" y1="113" x2="152" y2="174"/>
+                <line x1="146" y1="113" x2="170" y2="140"/><line x1="170" y1="140" x2="151" y2="153"/>
+                <line x1="152" y1="174" x2="111" y2="227"/><line x1="111" y1="227" x2="103" y2="269"/><line x1="103" y1="269" x2="83" y2="277"/>
+                <line x1="152" y1="174" x2="179" y2="222"/><line x1="179" y1="222" x2="207" y2="258"/><line x1="207" y1="258" x2="220" y2="265"/>
+              </g>
+              <circle cx="155" cy="72" r="6.5" fill="#dbe9fb" stroke="#6ea0dc" stroke-width="1.5"/>
+              <g fill="#dbe9fb" stroke="#6ea0dc" stroke-width="1.5">
+                <circle cx="146" cy="113" r="4"/><circle cx="152" cy="174" r="4.5"/>
+                <circle cx="111" cy="227" r="4"/><circle cx="103" cy="269" r="3.5"/>
+                <circle cx="179" cy="222" r="4"/><circle cx="207" cy="258" r="3.5"/>
+              </g>
+            </svg>
+          </div>
+          <div class="scr-top">
+            <span class="rec"><span class="d"></span>REC 00:07</span>
+            <span class="live-tag">EN CUADRO</span>
+          </div>
+          <div class="scr-chips">
+            <span class="chip">POSE <b>33 pts</b></span>
+            <span class="chip g">▲ <b>176 spm</b></span>
+            <span class="chip">120 fps</span>
+          </div>
+        </div>
+      </div>
+      <div class="device-cap"><div class="n">Paso 1 · toma 1 de 2</div><h4>Filmá de perfil</h4><p>Cámara fija, buena luz. El motor detecta y sigue tu esqueleto en tiempo real.</p></div>
+    </div>
+
+    <!-- 2 · CAPTURA TRASERA -->
+    <div class="device lift">
+      <div class="phone">
+        <div class="notch"></div><span class="side l"></span><span class="side r"></span>
+        <div class="screen">
+          <div class="scr-track">
+            <img loading="lazy" src="https://images.unsplash.com/photo-1486218119243-13883505764c?w=900&amp;q=80" alt="CORREXO siguiendo a un corredor de espaldas" style="object-position:64% 40%">
+            <div class="grad"></div>
+            <svg viewBox="0 0 270 470" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%;z-index:5;pointer-events:none">
+              <!-- caja de deteccion -->
+              <g stroke="#f3743e" stroke-width="2" fill="none" opacity=".85">
+                <path d="M118 118 h-16 v16"/><path d="M178 118 h16 v16"/>
+                <path d="M118 332 h-16 v-16"/><path d="M178 332 h16 v-16"/>
+              </g>
+              <!-- esqueleto trasero (simetrico) -->
+              <g stroke="#6ea0dc" stroke-width="3" stroke-linecap="round" fill="none" opacity=".95">
+                <line x1="133" y1="172" x2="163" y2="172"/>
+                <line x1="148" y1="152" x2="148" y2="236"/>
+                <line x1="137" y1="236" x2="159" y2="236"/>
+                <line x1="137" y1="236" x2="133" y2="286"/><line x1="133" y1="286" x2="129" y2="330"/>
+                <line x1="159" y1="236" x2="165" y2="286"/><line x1="165" y1="286" x2="171" y2="326"/>
+              </g>
+              <circle cx="148" cy="146" r="6.5" fill="#dbe9fb" stroke="#6ea0dc" stroke-width="1.5"/>
+              <g fill="#dbe9fb" stroke="#6ea0dc" stroke-width="1.5">
+                <circle cx="133" cy="172" r="4"/><circle cx="163" cy="172" r="4"/>
+                <circle cx="137" cy="236" r="4"/><circle cx="159" cy="236" r="4"/>
+                <circle cx="133" cy="286" r="3.5"/><circle cx="165" cy="286" r="3.5"/>
+                <circle cx="129" cy="330" r="3"/><circle cx="171" cy="326" r="3"/>
+              </g>
+            </svg>
+          </div>
+          <div class="scr-top">
+            <span class="rec"><span class="d"></span>REC 00:06</span>
+            <span class="live-tag">DE ESPALDAS</span>
+          </div>
+          <div class="scr-chips">
+            <span class="chip">POSE <b>33 pts</b></span>
+            <span class="chip">caída pélvica</span>
+            <span class="chip">valgo</span>
+          </div>
+        </div>
+      </div>
+      <div class="device-cap"><div class="n">Paso 2 · toma 2 de 2</div><h4>Filmá de atrás</h4><p>La segunda toma, de espaldas. Habilita el plano frontal: caída pélvica y valgo de rodilla.</p></div>
+    </div>
+
+    <!-- 3 · MEDICIÓN -->
+    <div class="device">
+      <div class="phone">
+        <div class="notch"></div><span class="side l"></span><span class="side r"></span>
+        <div class="screen">
+          <div class="scr-app">
+            <div class="aph"><span class="t">Vista lateral</span><span class="s">medido ✓</span></div>
+            <div class="mmetric b-good">
+              <div class="r1"><span class="nm">Cadencia</span><span class="mband b-good">En rango</span></div>
+              <div class="r2"><span class="vv">176</span><span class="uu">spm</span></div>
+              <div class="bar"><i style="width:82%"></i></div>
+            </div>
+            <div class="mmetric b-good">
+              <div class="r1"><span class="nm">Oscilación vertical</span><span class="mband b-good">Buena</span></div>
+              <div class="r2"><span class="vv">7.4</span><span class="uu">cm</span></div>
+              <div class="bar"><i style="width:64%"></i></div>
+            </div>
+            <div class="mmetric b-warn">
+              <div class="r1"><span class="nm">Overstride</span><span class="mband b-warn">Leve</span></div>
+              <div class="r2"><span class="vv">+6.1</span><span class="uu">cm ante CoM</span></div>
+              <div class="bar"><i style="width:58%"></i></div>
+            </div>
+            <div class="mmetric b-warn">
+              <div class="r1"><span class="nm">Caída pélvica</span><span class="mband b-warn">A vigilar</span></div>
+              <div class="r2"><span class="vv">6°</span><span class="uu">descenso</span></div>
+              <div class="bar"><i style="width:52%"></i></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="device-cap"><div class="n">Paso 3</div><h4>Medí lo que importa</h4><p>Cada variable en su banda de color y con nivel de confianza. Sin decimales falsos.</p></div>
+    </div>
+
+    <!-- 4 · PLAN -->
+    <div class="device lift">
+      <div class="phone">
+        <div class="notch"></div><span class="side l"></span><span class="side r"></span>
+        <div class="screen">
+          <div class="scr-app">
+            <div class="aph"><span class="t">Resumen &amp; plan</span><span class="s">screening</span></div>
+            <div class="mscore"><div class="b">82</div><div class="l">Índice de screening</div></div>
+            <div class="mfind b-warn"><span class="dot"></span><span><b>Overstride leve.</b> El pie aterriza algo adelantado del centro de masa.</span></div>
+            <div class="mfind b-good"><span class="dot"></span><span><b>Cadencia óptima.</b> 176 spm, dentro del rango objetivo.</span></div>
+            <div class="mplan">
+              <div class="pt">Ejercicio · evidencia</div>
+              <div class="ph">Subí cadencia 5–8%</div>
+              <div class="pp">Metrónomo a 185 spm en tramos de 1′. Reduce pico de impacto y carga.</div>
+            </div>
+            <div class="abtn">Descargar reporte PDF</div>
+          </div>
+        </div>
+      </div>
+      <div class="device-cap"><div class="n">Paso 4</div><h4>Recibí tu plan</h4><p>Hallazgos priorizados y ejercicios por evidencia. Reporte firmable en PDF.</p></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ CÓMO FUNCIONA ============ -->
+<section class="section" id="como">
+  <div class="kicker">Cómo funciona</div>
+  <h2 class="sec-title">Tres pasos, sin equipo especial.</h2>
+  <p class="sec-lead">Lo único que necesitás es un teléfono y unos metros para correr. Cuanto mejor la toma, mejor la medición.</p>
+  <div class="steps">
+    <div class="step"><div class="num">1</div><h3>Filmá</h3><p>Una corrida corta de perfil y otra de espaldas. Cámara fija, buena luz, ≥60 fps. Ideal en cinta o tramo recto.</p></div>
+    <div class="step"><div class="num">2</div><h3>Subí</h3><p>Cargás los videos en CORREXO. El motor sigue tu cuerpo cuadro por cuadro con pose 2D (BlazePose, 33 puntos).</p></div>
+    <div class="step"><div class="num">3</div><h3>Recibí</h3><p>Métricas en bandas claras, hallazgos y un plan de ejercicios por evidencia. Descargás el reporte firmable en PDF.</p></div>
+  </div>
+</section>
+
+<!-- ============ QUÉ MIDE ============ -->
+<section class="section tight" id="mide">
+  <div class="kicker">Qué mide</div>
+  <h2 class="sec-title">Las variables que sí predicen lesión.</h2>
+  <p class="sec-lead">No te mareamos con decimales que la cámara no puede medir. Priorizamos las métricas con evidencia real y las reportamos con su nivel de confianza.</p>
+  <div class="feat-grid">
+    <div class="feat"><span class="ev e-strong">Evidencia fuerte</span><h4>Cadencia</h4><p>Tu frecuencia de paso. Subirla un 5–10% reduce el pico de impacto y las tasas de carga.</p><div class="view">Vista lateral · confianza alta</div></div>
+    <div class="feat"><span class="ev e-mid">Evidencia media</span><h4>Oscilación vertical</h4><p>Cuánto "rebotás" en cada paso. Menos rebote suele indicar carrera más económica.</p><div class="view">Vista lateral · confianza media</div></div>
+    <div class="feat"><span class="ev e-strong">Evidencia buena</span><h4>Overstride</h4><p>Si el pie aterriza muy adelante del cuerpo, aumentás el frenado y la carga articular.</p><div class="view">Vista lateral · confianza media</div></div>
+    <div class="feat"><span class="ev e-strong">Evidencia prospectiva</span><h4>Caída pélvica</h4><p>El descenso de la pelvis en el apoyo se asocia a lesión y a debilidad de abductores de cadera.</p><div class="view">Vista trasera · confianza media</div></div>
+    <div class="feat"><span class="ev e-strong">Evidencia prospectiva</span><h4>Valgo dinámico</h4><p>La rodilla que "colapsa" hacia adentro se vincula a dolor patelofemoral y lesiones de rodilla.</p><div class="view">Vista trasera · confianza media</div></div>
+    <div class="feat"><span class="ev e-mid">Control de calidad</span><h4>Confianza de la toma</h4><p>Si el video no permite medir bien, te lo decimos y te pedimos recapturar. Nunca inventamos un número.</p><div class="view">Ambas vistas</div></div>
+  </div>
+</section>
+
+<!-- ============ CIENCIA ============ -->
+<section class="science"><div class="section">
+  <div class="kicker">Por qué confiar</div>
+  <h2 class="sec-title">Fundado en evidencia. Sin falsa precisión.</h2>
+  <p class="sec-lead">La estimación de pose 2D tiene un error conocido. En vez de esconderlo detrás de decimales, lo asumimos: reportamos en bandas, mostramos la confianza de cada métrica, y dejamos que un profesional valide y firme.</p>
+  <div class="sci-grid">
+    <div class="sci"><h4>Evidencia, no marketing</h4><p>Cada métrica que priorizamos está respaldada por literatura de biomecánica de carrera. Citamos las fuentes, no las escondemos.</p></div>
+    <div class="sci"><h4>Honestidad de precisión</h4><p>Lo que la cámara mide bien (cadencia) va con número; lo que mide con margen (ángulos) va en bandas. Nunca al revés.</p></div>
+    <div class="sci"><h4>El profesional firma</h4><p>CORREXO no reemplaza al kinesiólogo: lo potencia. El reporte tiene espacio para su validación y firma.</p></div>
+  </div>
+  <div class="sci-refs">
+    Referencias: aumento de cadencia y reducción de tasas de carga (<a href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7450991/">PMC7450991</a>) · aducción de cadera y riesgo de lesión (<a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC9528670/">PMC9528670</a>) · validez de pose markerless en carrera (<a href="https://www.sciencedirect.com/science/article/pii/S002192902300372X">ScienceDirect</a>).
+  </div>
+</div></section>
+
+<!-- ============ APP ============ -->
+<section class="section tight" id="analizar">
+  <div class="kicker">Probalo ahora</div>
+  <h2 class="sec-title">Analizá tu carrera</h2>
+  <p class="sec-lead">Cargá tus videos y obtené el screening. Ver los resultados en pantalla es gratis; el reporte PDF firmable se desbloquea con el pago.</p>
+</section>
+<div class="app-embed">
+  <div class="model-state" id="modelState"><span class="led"></span><span id="modelText">Cargando motor…</span><button class="btn-retry" id="modelRetry" style="display:none">Reintentar</button></div>
+</div>
+
+<div class="wrap">
+  <div class="tabs">
+    <button class="tab active" data-tab="lat">📹 Vista lateral</button>
+    <button class="tab" data-tab="rear">📹 Vista trasera</button>
+    <button class="tab" data-tab="sum">📋 Resumen &amp; plan</button>
+    <button class="tab" data-tab="op">🔒 Operador</button>
+  </div>
+
+  <!-- ============ LATERAL ============ -->
+  <div class="tabpane active" id="pane-lat">
+    <div class="layout">
+      <section class="panel">
+        <h2>📹 Video — vista lateral</h2>
+        <p class="hint">Corredor de perfil, cámara perpendicular a la altura de la cadera. Idealmente en cinta, buena luz, fondo liso y de alto contraste con el calzado. <b>≥60&nbsp;fps</b> (120 mejor).</p>
+        <div class="drop" id="lat-drop" tabindex="0" role="button" aria-label="Cargar video lateral"><div class="big">📤 Click o arrastrá el video lateral</div><div class="small">MP4 · WebM · MOV</div></div>
+        <input type="file" id="lat-file" accept="video/*">
+        <div class="videoerr" id="lat-verr"></div>
+        <div class="video-box" id="lat-box"><span class="vbadge">VISTA LATERAL</span><video id="lat-video" playsinline muted></video><canvas class="overlay" id="lat-canvas"></canvas></div>
+        <div class="fields">
+          <div class="field"><label>Altura del corredor (cm) · opcional</label><input type="number" id="heightCm" placeholder="ej: 174" min="120" max="220"></div>
+          <div class="field"><label>Velocidad de análisis</label><select id="speedMode"><option value="full" selected>Precisa (BlazePose full)</option><option value="lite">Rápida (BlazePose lite)</option></select></div>
+        </div>
+        <div class="controls"><button class="btn btn-primary" id="lat-run" disabled>▶ Analizar lateral</button><button class="btn btn-secondary" id="lat-reset">↻</button></div>
+        <div class="prog" id="lat-prog"><div class="prog-track"><div class="prog-fill" id="lat-fill"></div></div><div class="prog-meta"><span id="lat-ptext">Procesando…</span><span id="lat-ftext">0 frames</span></div></div>
+      </section>
+      <section class="panel">
+        <h2>📈 Resultados — lateral</h2>
+        <p class="hint">Medición real desde el video. Sin decimales falsos: cada métrica con su banda y su nivel de confianza.</p>
+        <div class="empty" id="lat-empty"><div class="big">📊</div>Cargá un video lateral y tocá <b>Analizar</b>.</div>
+        <div class="results" id="lat-results"><div class="quality" id="lat-quality"><div class="qhead"><span class="qlabel">Calidad de la captura</span><span class="qval" id="lat-qval">—</span></div><div class="qstats" id="lat-qstats"></div><div class="qwarn" id="lat-qwarn" style="display:none"></div></div><div id="lat-metrics"></div><div class="disclaimer"><span class="eyebrow">Screening, no diagnóstico</span>Herramienta de tamizaje biomecánico y educación, no un diagnóstico médico. Rangos provisionales a validar con un profesional. Ante dolor o lesión, consultá a un kinesiólogo o médico deportivo.</div></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ============ TRASERA ============ -->
+  <div class="tabpane" id="pane-rear">
+    <div class="layout">
+      <section class="panel">
+        <h2>📹 Video — vista trasera</h2>
+        <p class="hint">Corredor de espaldas, corriendo hacia/desde la cámara. Cámara fija a la altura de la cadera, perfil frontal completo, buena luz. Mide plano frontal: <b>caída pélvica</b> y <b>valgo dinámico de rodilla</b>.</p>
+        <div class="drop" id="rear-drop" tabindex="0" role="button" aria-label="Cargar video trasero"><div class="big">📤 Click o arrastrá el video trasero</div><div class="small">MP4 · WebM · MOV</div></div>
+        <input type="file" id="rear-file" accept="video/*">
+        <div class="videoerr" id="rear-verr"></div>
+        <div class="video-box" id="rear-box"><span class="vbadge">VISTA TRASERA</span><video id="rear-video" playsinline muted></video><canvas class="overlay" id="rear-canvas"></canvas></div>
+        <div class="controls"><button class="btn btn-primary" id="rear-run" disabled>▶ Analizar trasera</button><button class="btn btn-secondary" id="rear-reset">↻</button></div>
+        <div class="prog" id="rear-prog"><div class="prog-track"><div class="prog-fill" id="rear-fill"></div></div><div class="prog-meta"><span id="rear-ptext">Procesando…</span><span id="rear-ftext">0 frames</span></div></div>
+      </section>
+      <section class="panel">
+        <h2>📈 Resultados — trasera</h2>
+        <p class="hint">Las métricas de plano frontal son de <b>confianza media/menor</b> (límite conocido de la pose 2D). Se reportan en bandas, nunca con decimales.</p>
+        <div class="empty" id="rear-empty"><div class="big">📊</div>Cargá un video trasero y tocá <b>Analizar</b>.</div>
+        <div class="results" id="rear-results"><div class="quality" id="rear-quality"><div class="qhead"><span class="qlabel">Calidad de la captura</span><span class="qval" id="rear-qval">—</span></div><div class="qstats" id="rear-qstats"></div><div class="qwarn" id="rear-qwarn" style="display:none"></div></div><div id="rear-metrics"></div><div class="disclaimer"><span class="eyebrow">Screening, no diagnóstico</span>Tamizaje biomecánico y educación, no diagnóstico. Rangos provisionales a validar con un profesional. Ante dolor o lesión, consultá a un kinesiólogo o médico deportivo.</div></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ============ RESUMEN ============ -->
+  <div class="tabpane" id="pane-sum">
+    <div class="sum-grid">
+      <section class="panel">
+        <h2>📋 Resumen del screening</h2>
+        <p class="hint">El screening completo necesita las <b>dos tomas</b>: perfil (vista lateral) y espaldas (vista trasera). El "índice" es orientativo, no un diagnóstico.</p>
+        <div id="view-status" class="view-status"></div>
+        <div class="empty" id="sum-empty"><div class="big">📋</div>Analizá <b>ambas vistas</b> para ver el resumen, el plan y el reporte.</div>
+        <div class="results" id="sum-results">
+          <div class="scorecard"><div class="big" id="sum-score">—</div><div class="lab">Índice de screening</div><div class="sub" id="sum-scoresub"></div></div>
+          <h2 style="font-size:.95rem">Hallazgos</h2>
+          <ul class="findings" id="sum-findings"></ul>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>💪 Plan de coaching por evidencia</h2>
+        <p class="hint">Aparecen solo los ejercicios que corresponden a los hallazgos detectados. Cada uno cita la lógica de evidencia.</p>
+        <div class="empty" id="plan-empty"><div class="big">💪</div>El plan se arma según lo que se detecte.</div>
+        <div class="results" id="plan-results"><div id="plan-list"></div></div>
+
+        <div id="report-block" style="display:none;margin-top:22px;border-top:1px solid var(--line);padding-top:18px">
+          <h2 style="font-size:.95rem;margin-bottom:12px">Reporte PDF</h2>
+          <div class="report-fields">
+            <div class="field"><label>Nombre del corredor</label><input type="text" id="rep-runner" placeholder="Nombre y apellido"></div>
+            <div class="field"><label>Profesional que firma · opcional</label><input type="text" id="rep-pro" placeholder="Lic./Dr. — matrícula"></div>
+          </div>
+          <div class="videoerr" id="pay-msg"></div>
+          <button class="btn btn-primary" id="unlockBtn" style="width:100%">🔒 Desbloquear reporte (pago)</button>
+          <button class="btn btn-primary" id="pdfBtn" style="width:100%;display:none">📥 Descargar reporte PDF</button>
+          <p style="font-size:.72rem;color:var(--ink-mute);font-family:var(--mono);margin-top:8px;line-height:1.5">Requiere las dos vistas analizadas (perfil + espaldas). El reporte firmable se desbloquea con el pago; los resultados en pantalla son gratuitos.</p>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ============ OPERADOR (piloto) ============ -->
+  <div class="tabpane" id="pane-op">
+    <div id="op-gate" class="panel" style="max-width:420px;margin:0 auto">
+      <h2>🔒 Modo operador</h2>
+      <p class="hint">Para el piloto: registrar corredores y guardar sus análisis y videos. Ingresá el PIN.</p>
+      <div class="field"><label>PIN</label><input type="password" id="op-pin" inputmode="numeric" placeholder="••••••"></div>
+      <div class="videoerr" id="op-pinerr"></div>
+      <button class="btn btn-primary" id="op-login" style="width:100%;margin-top:12px">Entrar</button>
+    </div>
+
+    <div id="op-panel" style="display:none">
+      <div class="sum-grid">
+        <section class="panel">
+          <h2>🏃 Nuevo corredor</h2>
+          <div class="report-fields">
+            <div class="field"><label>Nombre</label><input id="op-name" placeholder="Nombre y apellido"></div>
+            <div class="field"><label>Camp / sede</label><input id="op-camp" placeholder="Ej: Trail Camp Bariloche"></div>
+            <div class="field"><label>Altura (cm)</label><input id="op-height" type="number" placeholder="174"></div>
+            <div class="field"><label>Edad</label><input id="op-age" type="number" placeholder="34"></div>
+          </div>
+          <label style="display:flex;gap:9px;align-items:flex-start;font-size:.82rem;color:var(--ink-soft);margin-top:12px;cursor:pointer">
+            <input type="checkbox" id="op-consent" style="margin-top:3px;flex:none">
+            <span>El corredor dio su <b>consentimiento informado</b>: entiende que es un screening (no un diagnóstico), que un profesional evalúa y firma, y autoriza el almacenamiento de sus 2 videos para validación.</span>
+          </label>
+
+          <div class="view-status" id="op-status" style="margin-top:16px"></div>
+          <p class="hint">Analizá las dos tomas en las pestañas <b>Vista lateral</b> y <b>Vista trasera</b>; después completá la revisión médica y guardá.</p>
+
+          <h2 style="font-size:.98rem;margin-top:6px">👨‍⚕️ Revisión médica</h2>
+          <div class="report-fields">
+            <div class="field"><label>Médico</label><input id="op-docname" placeholder="Dr./Lic. Nombre"></div>
+            <div class="field"><label>Matrícula</label><input id="op-docreg" placeholder="MP 12345"></div>
+          </div>
+          <div class="field" style="margin-top:12px"><label>Notas clínicas</label><textarea id="op-notes" rows="3" placeholder="Hallazgos, observaciones..."></textarea></div>
+          <div class="report-fields" style="margin-top:12px">
+            <div class="field"><label>¿Coincide con tu evaluación clínica?</label><select id="op-concord"><option value="">— elegir —</option><option value="si">Sí</option><option value="parcial">Parcial</option><option value="no">No</option></select></div>
+            <div class="field"><label>¿Qué ajustarías? (opcional)</label><input id="op-adjust" placeholder="..."></div>
+          </div>
+
+          <div class="videoerr" id="op-saveerr"></div>
+          <button class="btn btn-primary" id="op-save" style="width:100%;margin-top:14px">💾 Guardar corredor (sube los 2 videos)</button>
+        </section>
+
+        <section class="panel">
+          <h2>📇 Corredores guardados</h2>
+          <p class="hint">Del piloto. <a href="#" id="op-export" style="color:var(--accent)">⬇ Descargar CSV</a> — métricas + concordancia médica (tu dataset de validación).</p>
+          <div id="op-list"><p class="hint">—</p></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="mono">CORREXO · motor de medición real · BlazePose 33 landmarks · lateral (cadencia · oscilación vertical · overstride) + trasera (caída pélvica · valgo dinámico)</div>
+    <details>
+      <summary>Estado de validación y notas técnicas ▾</summary>
+      <p><b>Qué es real:</b> detección de pose (BlazePose), extracción de series temporales por frame y cálculo de todas las métricas sobre múltiples ciclos de zancada. Nada hardcodeado — cada video da su propio resultado.</p>
+      <p><b>Confianza por métrica (según literatura de pose 2D, incl. estudio Ochy):</b> <b>cadencia</b> alta; <b>oscilación vertical</b> media; <b>overstride, caída pélvica y valgo</b> menores — por eso van en bandas y con etiqueta de confianza, nunca con decimales. La oscilación vertical en cm es estimada por estatura en píxeles (mejora con la altura real cargada o un objeto de referencia en cuadro).</p>
+      <p><b>Pendiente de validar (con tus videos):</b> los <b>umbrales de cada banda</b> son provisionales. Para cerrarlos hace falta el estudio de validación estilo Ochy (N corredores vs. patrón con marcadores, MAE/ICC/Bland-Altman) y cerrar rangos normativos con un kinesiólogo.</p>
+    </details>
+  </div>
+</div>
+
+<!-- ============ PRECIO ============ -->
+<section class="section pricing" id="precio">
+  <div class="inner">
+    <div class="kicker" style="text-align:center">Precio</div>
+    <h2 class="sec-title" style="text-align:center">Pagás por el reporte, no por mirar.</h2>
+    <p class="sec-lead" style="margin:0 auto;text-align:center">Los resultados en pantalla son gratis. El reporte PDF —descargable, firmable y compartible— se desbloquea con un pago único.</p>
+    <div class="price-card">
+      <div class="tag">Reporte CORREXO</div>
+      <!-- EDITÁ este monto para que coincida con el Price que creaste en Stripe -->
+      <div class="amount">US$ 12 <small>/ reporte</small></div>
+      <ul>
+        <li>Análisis lateral y trasero completo</li>
+        <li>Métricas en bandas + nivel de confianza</li>
+        <li>Plan de coaching por evidencia</li>
+        <li>PDF con espacio de firma profesional</li>
+      </ul>
+      <a href="#analizar" class="btn-lg btn-fill" style="width:100%;justify-content:center">Empezar análisis</a>
+      <div class="note">El monto se configura en Stripe. Pago seguro vía Stripe Checkout.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PROFESIONALES / B2B ============ -->
+<section class="section tight">
+  <div class="pro-band">
+    <div>
+      <div class="kicker">Para profesionales y locales</div>
+      <h3>¿Sos kinesiólogo, entrenador o tenés un local de running?</h3>
+      <p>CORREXO estandariza y acelera tu análisis de pisada, y el reporte lleva tu firma. Convertí una evaluación de 40 minutos en un servicio repetible y premium para tus clientes.</p>
+      <a href="mailto:facu@todotrail.run?subject=CORREXO%20para%20profesionales" class="btn-lg btn-ghost" style="margin-top:20px">Quiero usarlo en mi servicio →</a>
+    </div>
+    <div class="pro-photo"><img loading="lazy" src="https://images.unsplash.com/photo-1461897104016-0b3b00cc81ee?w=1200&amp;q=80" alt="Atletas en plena carrera"></div>
+  </div>
+</section>
+
+<!-- ============ TESTIMONIOS (slots reales a completar) ============ -->
+<section class="section tight">
+  <div class="kicker">Lo que dicen</div>
+  <h2 class="sec-title">Voces reales del método.</h2>
+  <p class="sec-lead">Sumá acá testimonios verdaderos de atletas y profesionales que usaron CORREXO. No inventamos reseñas.</p>
+  <div class="testi-grid">
+    <div class="testi"><div class="slot">▚ Slot — reemplazar por testimonio real</div><p>"Reemplazá este texto por la experiencia real de un corredor de tu comunidad."</p><div class="who">— Nombre, categoría / distancia</div></div>
+    <div class="testi"><div class="slot">▚ Slot — reemplazar por testimonio real</div><p>"Reemplazá por la cita real de un kinesiólogo o entrenador que lo use."</p><div class="who">— Lic./Dr. Nombre, matrícula</div></div>
+    <div class="testi"><div class="slot">▚ Slot — reemplazar por testimonio real</div><p>"Reemplazá por el resultado concreto de alguien: qué mejoró, en cuánto tiempo."</p><div class="who">— Nombre, TodoTrail</div></div>
+  </div>
+</section>
+
+<!-- ============ CTA FINAL ============ -->
+<section class="section cta-final">
+  <h2>Dejá de adivinar tu técnica.</h2>
+  <p class="sec-lead" style="margin:0 auto 26px;text-align:center">Filmá una corrida y descubrí, con datos, qué trabajar para correr mejor y lesionarte menos.</p>
+  <a href="#analizar" class="btn-lg btn-fill">Analizar mi carrera →</a>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer class="site-foot">
+  <div class="inner">
+    <div>
+      <div class="logo" style="font-family:var(--display);font-weight:800;font-size:1.05rem;margin-bottom:8px">📊 CORREXO</div>
+      <div class="disc">Screening biomecánico con fines educativos y de coaching. No es un diagnóstico médico ni sustituye la evaluación de un profesional de la salud. Ante dolor o lesión, consultá a un kinesiólogo o médico deportivo. Un producto de TodoTrail.</div>
+    </div>
+    <div style="text-align:right">
+      <a href="#como">Cómo funciona</a> · <a href="#mide">Qué mide</a> · <a href="#ciencia">Ciencia</a> · <a href="#precio">Precio</a><br>
+      <span style="font-family:var(--mono);font-size:.72rem">© <span id="year"></span> CORREXO · TodoTrail</span>
+    </div>
+  </div>
+</footer>
+
+<!-- contenedor de PDF -->
+<div id="pdfReport"></div>
+
+<script>
+/* ============================================================
+   CORREXO — motor de análisis biomecánico real (lateral + trasera)
+   ============================================================ */
+let detector=null, modelReady=false, currentModelType='full';
+
+/* estado por vista */
+const V={
+  lat:{samples:[],report:null,analyzing:false,
+       video:'lat-video',canvas:'lat-canvas',box:'lat-box',drop:'lat-drop',file:'lat-file',verr:'lat-verr',
+       run:'lat-run',reset:'lat-reset',prog:'lat-prog',fill:'lat-fill',ptext:'lat-ptext',ftext:'lat-ftext',
+       empty:'lat-empty',results:'lat-results',quality:'lat-quality',qval:'lat-qval',qstats:'lat-qstats',qwarn:'lat-qwarn',metrics:'lat-metrics'},
+  rear:{samples:[],report:null,analyzing:false,
+       video:'rear-video',canvas:'rear-canvas',box:'rear-box',drop:'rear-drop',file:'rear-file',verr:'rear-verr',
+       run:'rear-run',reset:'rear-reset',prog:'rear-prog',fill:'rear-fill',ptext:'rear-ptext',ftext:'rear-ftext',
+       empty:'rear-empty',results:'rear-results',quality:'rear-quality',qval:'rear-qval',qstats:'rear-qstats',qwarn:'rear-qwarn',metrics:'rear-metrics'}
+};
+const $=id=>document.getElementById(id);
+const el=(view,key)=>$(V[view][key]);
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.tabpane').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  $('pane-'+t.dataset.tab).classList.add('active');
+  if(t.dataset.tab==='sum') renderSummary();
+  if(t.dataset.tab==='op') refreshOperator();
+}));
+
+/* ---------- carga del modelo ---------- */
+async function loadModel(modelType){
+  currentModelType=modelType;
+  $('modelRetry').style.display='none';
+  if(typeof tf==='undefined'||typeof poseDetection==='undefined'){
+    $('modelState').className='model-state err';
+    $('modelText').textContent='No se pudieron cargar las librerías (sin conexión o CDN bloqueado)';
+    $('modelRetry').style.display='inline-block';
+    return;
+  }
+  try{
+    $('modelState').className='model-state'; $('modelText').textContent='Cargando motor…';
+    await tf.setBackend('webgl'); await tf.ready();
+    if(detector){ detector.dispose(); detector=null; }
+    let via='mediapipe';
+    try{
+      detector=await poseDetection.createDetector(poseDetection.SupportedModels.BlazePose,
+        {runtime:'mediapipe',solutionPath:'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404',modelType});
+    }catch(mpErr){
+      console.warn('Runtime mediapipe falló, fallback tfjs:',mpErr); via='tfjs';
+      detector=await poseDetection.createDetector(poseDetection.SupportedModels.BlazePose,{runtime:'tfjs',modelType});
+    }
+    modelReady=true;
+    $('modelState').className='model-state ready';
+    $('modelText').textContent='Motor listo · BlazePose '+modelType+' ('+via+')';
+    ['lat','rear'].forEach(v=>{ if(el(v,'video').src) el(v,'run').disabled=false; });
+  }catch(err){
+    console.error('Error cargando modelo:',err);
+    $('modelState').className='model-state err';
+    $('modelText').textContent='Error al cargar el motor (revisá tu conexión)';
+    $('modelRetry').style.display='inline-block';
+  }
+}
+$('modelRetry').addEventListener('click',()=>loadModel(currentModelType));
+
+/* ---------- setup de cada vista ---------- */
+function setupView(view){
+  const drop=el(view,'drop'),file=el(view,'file'),video=el(view,'video'),canvas=el(view,'canvas'),verr=el(view,'verr');
+  function onFile(f){
+    if(!f) return;
+    if(!/^video\//.test(f.type||'')){ verr.textContent='Ese archivo no parece un video. Usá MP4, WebM o MOV.'; verr.classList.add('show'); return; }
+    verr.classList.remove('show');
+    V[view].file=f;
+    video.src=URL.createObjectURL(f);
+    el(view,'box').classList.add('show');
+    el(view,'run').disabled=true;
+    video.onloadedmetadata=()=>{ canvas.width=video.videoWidth; canvas.height=video.videoHeight; if(modelReady) el(view,'run').disabled=false; };
+    el(view,'empty').style.display='block'; el(view,'results').classList.remove('show');
+  }
+  video.addEventListener('error',()=>{ verr.textContent='No se pudo reproducir el video (formato no soportado por el navegador). Probá con MP4 H.264 o WebM.'; verr.classList.add('show'); el(view,'run').disabled=true; });
+  drop.addEventListener('click',()=>file.click());
+  drop.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); file.click(); }});
+  file.addEventListener('change',e=>onFile(e.target.files[0]));
+  ['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('drag');}));
+  drop.addEventListener('drop',e=>onFile(e.dataTransfer.files[0]));
+  el(view,'run').addEventListener('click',()=>startAnalysis(view));
+  el(view,'reset').addEventListener('click',()=>resetView(view));
+}
+function resetView(view){
+  const st=V[view]; if(st.analyzing) return;
+  const video=el(view,'video');
+  if(video.src){ try{ URL.revokeObjectURL(video.src); }catch(e){} video.removeAttribute('src'); video.load(); }
+  st.samples=[]; st.report=null;
+  el(view,'canvas').getContext('2d').clearRect(0,0,el(view,'canvas').width,el(view,'canvas').height);
+  el(view,'box').classList.remove('show'); el(view,'verr').classList.remove('show');
+  el(view,'results').classList.remove('show'); el(view,'empty').style.display='block';
+  el(view,'prog').classList.remove('show'); el(view,'fill').style.width='0%';
+  el(view,'run').disabled=true; el(view,'file').value='';
+}
+setupView('lat'); setupView('rear');
+$('speedMode').addEventListener('change',e=>{ if(e.target.value!==currentModelType){ modelReady=false; ['lat','rear'].forEach(v=>el(v,'run').disabled=true); loadModel(e.target.value); }});
+
+/* ---------- captura de pose (pipeline compartido) ---------- */
+const MAX_ANALYSIS_SEC=25; // tope para no colgar en videos largos
+async function startAnalysis(view){
+  const st=V[view];
+  if(!modelReady||!el(view,'video').src||st.analyzing) return;
+  st.analyzing=true; st.samples=[];
+  el(view,'run').disabled=true; el(view,'reset').disabled=true; $('speedMode').disabled=true;
+  el(view,'empty').style.display='none';
+  el(view,'results').classList.remove('show'); el(view,'prog').classList.add('show');
+  const video=el(view,'video'), ctx=el(view,'canvas').getContext('2d');
+  try{ video.currentTime=0; await video.play(); }
+  catch(e){ console.warn('play falló',e); el(view,'verr').textContent='El navegador bloqueó la reproducción. Tocá el video y reintentá.'; el(view,'verr').classList.add('show'); finish(view); return; }
+  const useRVFC='requestVideoFrameCallback' in HTMLVideoElement.prototype;
+  async function frame(now,meta){
+    if(video.ended||video.paused){ finish(view); return; }
+    const t=meta?meta.mediaTime:video.currentTime;
+    if(t>MAX_ANALYSIS_SEC){ video.pause(); finish(view); return; }
+    try{
+      const poses=await detector.estimatePoses(video,{maxPoses:1,flipHorizontal:false});
+      if(poses&&poses[0]){
+        const kp={}; poses[0].keypoints.forEach(k=>kp[k.name]={x:k.x,y:k.y,score:(k.score==null?1:k.score)});
+        st.samples.push({t,kp}); drawSkeleton(ctx,el(view,'canvas'),poses[0].keypoints);
+      }
+    }catch(err){ console.warn('frame err',err); }
+    const p=video.duration?Math.min(99,(t/video.duration)*100):0;
+    el(view,'fill').style.width=p+'%'; el(view,'ftext').textContent=st.samples.length+' frames';
+    el(view,'ptext').textContent='Procesando… '+Math.round(p)+'%';
+    if(useRVFC) video.requestVideoFrameCallback(frame); else requestAnimationFrame(()=>frame(performance.now(),null));
+  }
+  if(useRVFC) video.requestVideoFrameCallback(frame); else requestAnimationFrame(()=>frame(performance.now(),null));
+}
+function finish(view){
+  const st=V[view];
+  st.analyzing=false; el(view,'fill').style.width='100%'; el(view,'ptext').textContent='Listo';
+  el(view,'run').disabled=false; el(view,'reset').disabled=false; $('speedMode').disabled=false;
+  st.report = view==='lat' ? computeLateral(st.samples) : computeRear(st.samples);
+  renderReport(view,st.report);
+  saveState();
+}
+
+/* ---------- dibujo esqueleto ---------- */
+const CONNECTIONS=[
+  ['left_shoulder','right_shoulder'],['left_shoulder','left_hip'],['right_shoulder','right_hip'],['left_hip','right_hip'],
+  ['left_shoulder','left_elbow'],['left_elbow','left_wrist'],['right_shoulder','right_elbow'],['right_elbow','right_wrist'],
+  ['left_hip','left_knee'],['left_knee','left_ankle'],['left_ankle','left_heel'],['left_heel','left_foot_index'],['left_ankle','left_foot_index'],
+  ['right_hip','right_knee'],['right_knee','right_ankle'],['right_ankle','right_heel'],['right_heel','right_foot_index'],['right_ankle','right_foot_index']
+];
+function drawSkeleton(ctx,canvas,keypoints){
+  const m={}; keypoints.forEach(k=>m[k.name]=k);
+  ctx.clearRect(0,0,canvas.width,canvas.height); ctx.lineWidth=3; ctx.strokeStyle='#6ea0dc';
+  CONNECTIONS.forEach(([a,b])=>{const ka=m[a],kb=m[b];if(ka&&kb&&(ka.score==null||ka.score>.3)&&(kb.score==null||kb.score>.3)){ctx.beginPath();ctx.moveTo(ka.x,ka.y);ctx.lineTo(kb.x,kb.y);ctx.stroke();}});
+  ctx.fillStyle='#f3743e'; keypoints.forEach(k=>{if(k.score==null||k.score>.3){ctx.beginPath();ctx.arc(k.x,k.y,5,0,Math.PI*2);ctx.fill();}});
+}
+
+/* ============================================================
+   CÁLCULO — base común
+   ============================================================ */
+function computeBase(S){
+  const n=S.length, dur=n>1?(S[n-1].t-S[0].t):0, fps=dur>0?n/dur:0;
+  const keyLM=['left_hip','right_hip','left_knee','right_knee','left_ankle','right_ankle'];
+  let vs=0,vc=0; S.forEach(s=>keyLM.forEach(k=>{if(s.kp[k]){vs+=s.kp[k].score;vc++;}}));
+  const avgVis=vc?vs/vc:0;
+  const t=[],hipY=[],hipX=[],statPx=[];
+  S.forEach(s=>{
+    const lh=s.kp['left_hip'],rh=s.kp['right_hip']; if(!lh||!rh)return;
+    t.push(s.t); hipY.push((lh.y+rh.y)/2); hipX.push((lh.x+rh.x)/2);
+    const nose=s.kp['nose'];
+    const feet=['left_foot_index','right_foot_index','left_heel','right_heel','left_ankle','right_ankle'].map(k=>s.kp[k]).filter(Boolean).map(k=>k.y);
+    if(nose&&feet.length) statPx.push((Math.max(...feet)-nose.y)/0.88);
+  });
+  const hipYs=movingAverage(hipY,3);
+  const trend=movingAverageTime(t,hipYs,0.6);
+  const detr=hipYs.map((v,i)=>v-trend[i]);
+  const sd=stddev(detr);
+  const peaks=findPeaksTimed(t,detr,0.22,Math.max(sd*0.35,1e-6));
+  const steps=peaks.length, cadence=dur>0?steps/dur*60:0;
+  const enough=t.length>=15&&dur>=2.5;
+  return {S,n,dur,fps,avgVis,t,hipY,hipX,statPx,statureMedian:statPx.length?median(statPx):null,peaks,steps,cadence,enough};
+}
+
+/* ---------- LATERAL ---------- */
+function computeLateral(S){
+  const b=computeBase(S);
+  const voPx=quantile(b.hipY,0.92)-quantile(b.hipY,0.08);
+  const heightCm=parseFloat($('heightCm').value);
+  let voCm=null,voPct=null;
+  if(b.statureMedian){ voPct=voPx/b.statureMedian*100; if(heightCm>0) voCm=voPx*(heightCm/b.statureMedian); }
+  // overstride
+  let fwdSum=0,fwdVotes=0;
+  S.forEach(s=>['left','right'].forEach(side=>{const fi=s.kp[side+'_foot_index'],he=s.kp[side+'_heel'];if(fi&&he&&fi.score>.3&&he.score>.3){fwdSum+=Math.sign(fi.x-he.x);fwdVotes++;}}));
+  const fwd=fwdVotes?(Math.sign(fwdSum)||1):1;
+  const legLens=[]; S.forEach(s=>['left','right'].forEach(side=>{const h=s.kp[side+'_hip'],a=s.kp[side+'_ankle'];if(h&&a&&h.score>.3&&a.score>.3)legLens.push(Math.hypot(a.x-h.x,a.y-h.y));}));
+  const legLen=legLens.length?median(legLens):null;
+  const offsets=[],shanks=[];
+  b.peaks.forEach(pi=>{
+    const tp=b.t[pi]; let best=null,bd=1e9; S.forEach(s=>{const d=Math.abs(s.t-tp);if(d<bd){bd=d;best=s;}}); if(!best)return;
+    let footSide=null,fy=-1; ['left','right'].forEach(side=>{const a=best.kp[side+'_ankle'];if(a&&a.score>.3&&a.y>fy){fy=a.y;footSide=side;}}); if(!footSide)return;
+    const ank=best.kp[footSide+'_ankle'],kn=best.kp[footSide+'_knee'],lh=best.kp['left_hip'],rh=best.kp['right_hip'];
+    if(ank&&lh&&rh&&legLen){ const hcx=(lh.x+rh.x)/2; offsets.push((ank.x-hcx)*fwd/legLen); if(kn&&kn.score>.3) shanks.push(Math.atan2((ank.x-kn.x)*fwd,(ank.y-kn.y))*180/Math.PI); }
+  });
+  return Object.assign(b,{view:'lat',voPx,voCm,voPct,heightGiven:(heightCm>0),
+    overOffset:offsets.length?median(offsets.filter(o=>o>-0.5)):null, shankAngle:shanks.length?median(shanks):null, overN:offsets.length, legLen});
+}
+
+/* ---------- TRASERA ---------- */
+function computeRear(S){
+  const b=computeBase(S);
+  // caída pélvica: ángulo de la línea de caderas respecto de la horizontal
+  const angs=[];
+  S.forEach(s=>{const lh=s.kp['left_hip'],rh=s.kp['right_hip'];if(lh&&rh&&lh.score>.3&&rh.score>.3){angs.push(Math.atan2(rh.y-lh.y,rh.x-lh.x)*180/Math.PI);}});
+  let cpd=null;
+  if(angs.length>5){ const med=median(angs); const dev=angs.map(a=>Math.abs(a-med)); cpd=quantile(dev,0.92); }
+  // valgo dinámico: desvío frontal de la rodilla respecto de la línea cadera-tobillo, normalizado por largo de pierna, en apoyo
+  const valg=[];
+  b.peaks.forEach(pi=>{
+    const tp=b.t[pi]; let best=null,bd=1e9; S.forEach(s=>{const d=Math.abs(s.t-tp);if(d<bd){bd=d;best=s;}}); if(!best)return;
+    let footSide=null,fy=-1; ['left','right'].forEach(side=>{const a=best.kp[side+'_ankle'];if(a&&a.score>.3&&a.y>fy){fy=a.y;footSide=side;}}); if(!footSide)return;
+    const h=best.kp[footSide+'_hip'],k=best.kp[footSide+'_knee'],a=best.kp[footSide+'_ankle'];
+    if(h&&k&&a&&h.score>.3&&k.score>.3&&a.score>.3){
+      const L=Math.hypot(a.x-h.x,a.y-h.y); if(L<1)return;
+      // distancia perpendicular de la rodilla a la línea cadera->tobillo
+      const dperp=Math.abs((a.y-h.y)*k.x-(a.x-h.x)*k.y+a.x*h.y-a.y*h.x)/L;
+      valg.push(dperp/L);
+    }
+  });
+  const valgus=valg.length?median(valg):null;
+  return Object.assign(b,{view:'rear',cpd,valgus,valgN:valg.length});
+}
+
+/* ---------- helpers de señal ---------- */
+function movingAverage(a,w){const r=[];for(let i=0;i<a.length;i++){let s=0,c=0;for(let j=Math.max(0,i-w);j<=Math.min(a.length-1,i+w);j++){s+=a[j];c++;}r.push(s/c);}return r;}
+function movingAverageTime(t,a,win){const r=[];for(let i=0;i<a.length;i++){let s=0,c=0;for(let j=0;j<a.length;j++){if(Math.abs(t[j]-t[i])<=win/2){s+=a[j];c++;}}r.push(c?s/c:a[i]);}return r;}
+function stddev(a){if(!a.length)return 0;const m=a.reduce((x,y)=>x+y,0)/a.length;return Math.sqrt(a.reduce((x,y)=>x+(y-m)*(y-m),0)/a.length);}
+function median(a){if(!a.length)return null;const b=[...a].sort((x,y)=>x-y);const m=b.length>>1;return b.length%2?b[m]:(b[m-1]+b[m])/2;}
+function quantile(a,q){if(!a.length)return 0;const b=[...a].sort((x,y)=>x-y);const p=(b.length-1)*q,lo=Math.floor(p),hi=Math.ceil(p);return b[lo]+(b[hi]-b[lo])*(p-lo);}
+function findPeaksTimed(t,y,minSep,minAmp){const cand=[];for(let i=1;i<y.length-1;i++){if(y[i]>y[i-1]&&y[i]>=y[i+1]&&y[i]>minAmp)cand.push(i);}cand.sort((a,b)=>y[b]-y[a]);const ch=[];cand.forEach(i=>{if(ch.every(j=>Math.abs(t[i]-t[j])>=minSep))ch.push(i);});return ch.sort((a,b)=>a-b);}
+
+/* ============================================================
+   RENDER de resultados por vista
+   ============================================================ */
+function band(v,goodMax,warnMax){return v<=goodMax?'b-good':v<=warnMax?'b-warn':'b-bad';}
+function metricCard(o){
+  return `<div class="metric ${o.bandClass}"><div class="top"><span class="name">${o.name}</span><span class="conf">${o.conf}</span></div>
+    <div class="readout"><span class="val">${o.val}</span><span class="unit">${o.unit}</span><span class="band ${o.bandClass}">${o.bandLabel}</span></div>
+    <div class="desc">${o.desc}</div><div class="ref">${o.ref}</div></div>`;
+}
+function renderQuality(view,r,extraWarns){
+  const warns=[...extraWarns];
+  if(r.fps<30) warns.push('FPS efectivo bajo ('+r.fps.toFixed(0)+'). Grabá a ≥60 fps.');
+  if(r.avgVis<0.55) warns.push('Visibilidad de landmarks baja. Mejorá luz, contraste y encuadre.');
+  if(r.steps<6) warns.push('Pocas zancadas ('+r.steps+'). Filmá más segundos corriendo.');
+  if(r.dur<3) warns.push('Clip corto ('+r.dur.toFixed(1)+' s). Ideal ≥5 s en régimen estable.');
+  const badGate=(!r.enough)||r.avgVis<0.4||r.steps<4;
+  let qc,qt; if(badGate){qc='q-bad';qt='Insuficiente';} else if(warns.length>=2||r.avgVis<0.6||r.fps<30){qc='q-mid';qt='Aceptable';} else {qc='q-good';qt='Buena';}
+  el(view,'quality').className='quality '+qc; el(view,'qval').textContent=qt;
+  el(view,'qstats').innerHTML=`<span><b>${r.steps}</b> zancadas</span><span><b>${r.dur.toFixed(1)}</b> s</span><span><b>${r.fps.toFixed(0)}</b> fps</span><span><b>${r.n}</b> frames</span><span>visib. <b>${(r.avgVis*100).toFixed(0)}%</b></span>`;
+  if(warns.length){el(view,'qwarn').style.display='block';el(view,'qwarn').innerHTML='Avisos:<ul>'+warns.map(w=>`<li>${w}</li>`).join('')+'</ul>';} else el(view,'qwarn').style.display='none';
+  return badGate;
+}
+function gateCard(view,r){
+  const pose = view==='rear' ? 'de espaldas' : 'de perfil';
+  let title,body;
+  if(r.n<8){
+    title='No se detectó a la persona con claridad';
+    body=`Casi no se pudo seguir el cuerpo en el video. Verificá que el corredor aparezca completo en cuadro, ${pose}, con buena luz y contraste contra el fondo, y que el video efectivamente muestre a alguien corriendo.`;
+  }else{
+    title='Captura insuficiente para medir';
+    body='No hay señal fiable suficiente para reportar sin inventar. Recapturá siguiendo el protocolo (encuadre completo, cámara fija, ≥6 zancadas estables, buena luz y contraste) y volvé a analizar.';
+  }
+  return `<div class="metric b-bad"><div class="top"><span class="name">${title}</span></div><p class="desc">${body}</p></div>`;
+}
+
+function renderReport(view,r){
+  el(view,'empty').style.display='none';
+  el(view,'results').classList.add('show');
+  const badGate=renderQuality(view,r,[]);
+  if(badGate){ el(view,'metrics').innerHTML=gateCard(view,r); return; }
+  el(view,'metrics').innerHTML = view==='lat' ? lateralCards(r) : rearCards(r);
+}
+
+function lateralCards(r){
+  let html='';
+  const cad=Math.round(r.cadence);
+  html+=metricCard({name:'Cadencia',conf:'Confianza alta',val:cad,unit:'pasos/min',
+    bandClass:cad>=170?'b-good':cad>=160?'b-warn':'b-bad',bandLabel:cad>=170?'En rango':cad>=160?'Mejorable':'Baja',
+    desc:cad>=170?'Buena frecuencia de paso; se asocia a menor tiempo de contacto y menores tasas de carga vertical.':'Cadencia por debajo de lo recomendado para muchos corredores recreativos. Subirla un 5–10% reduce el pico de impacto y las tasas de carga.',
+    ref:'Guía provisional: >170 spm · el objetivo es individual, no un dogma de 180.'});
+  let vM,vU,vB,vL,vR;
+  if(r.voCm!=null){vM=r.voCm.toFixed(1);vU='cm (estimado)';vB=band(r.voCm,9,13);vL=r.voCm<=9?'Eficiente':r.voCm<=13?'Media':'Alta';vR='Guía provisional: ≤9 cm · 9–13 cm · >13 cm. Estimación por estatura en píxeles.';}
+  else if(r.voPct!=null){vM=r.voPct.toFixed(1);vU='% de la estatura';vB=band(r.voPct,5.5,8);vL=r.voPct<=5.5?'Eficiente':r.voPct<=8?'Media':'Alta';vR='Cargá la altura para verlo en cm. Guía provisional: ≤5.5% · 5.5–8% · >8%.';}
+  else {vM='—';vU='';vB='b-warn';vL='Sin dato';vR='No se pudo estimar la estatura en cuadro.';}
+  html+=metricCard({name:'Oscilación vertical',conf:'Confianza media',val:vM,unit:vU,bandClass:vB,bandLabel:vL,
+    desc:'Cuánto sube y baja el centro de masa en cada paso. Menos oscilación suele indicar carrera más económica y menos "rebote".',ref:vR});
+  if(r.overOffset!=null){
+    const ov=r.overOffset, ob=ov<=0.15?'b-good':ov<=0.30?'b-warn':'b-bad', ol=ov<=0.15?'Neutral':ov<=0.30?'Leve':'Marcado';
+    const sh=r.shankAngle!=null?` Ángulo de tibia al contacto ≈ ${Math.round(r.shankAngle)}° respecto de la vertical.`:'';
+    html+=metricCard({name:'Overstride (zancada adelantada)',conf:'Confianza menor · '+r.overN+' apoyos',val:(ov*100).toFixed(0),unit:'% del largo de pierna',
+      bandClass:ob,bandLabel:ol,desc:'Qué tan adelante del centro de masa aterriza el pie. Aterrizar muy adelante con la rodilla extendida aumenta el frenado y la carga articular.'+sh,
+      ref:'Umbrales provisionales: ≤15% neutral · 15–30% leve · >30% marcado.'});
+  }
+  return html;
+}
+function rearCards(r){
+  let html='';
+  const cad=Math.round(r.cadence);
+  html+=metricCard({name:'Cadencia (verificación)',conf:'Confianza alta',val:cad,unit:'pasos/min',
+    bandClass:cad>=170?'b-good':cad>=160?'b-warn':'b-bad',bandLabel:cad>=170?'En rango':cad>=160?'Mejorable':'Baja',
+    desc:'Se recalcula en la vista trasera como control; debería coincidir con la lateral.',ref:'Guía provisional: >170 spm.'});
+  if(r.cpd!=null){
+    const c=r.cpd, cb=c<=6?'b-good':c<=10?'b-warn':'b-bad', cl=c<=6?'Neutral':c<=10?'Leve':'Marcado';
+    html+=metricCard({name:'Caída pélvica contralateral',conf:'Confianza media',val:c.toFixed(0),unit:'° (pico)',
+      bandClass:cb,bandLabel:cl,desc:'Cuánto cae la pelvis del lado que no apoya durante el apoyo. Un descenso marcado se asocia de forma prospectiva a mayor riesgo de lesión y suele indicar debilidad de abductores de cadera.',
+      ref:'Umbrales provisionales: ≤6° · 6–10° · >10°.'});
+  }
+  if(r.valgus!=null){
+    const vg=r.valgus, vb=vg<=0.08?'b-good':vg<=0.15?'b-warn':'b-bad', vl=vg<=0.08?'Neutral':vg<=0.15?'Leve':'Marcado';
+    html+=metricCard({name:'Valgo dinámico de rodilla',conf:'Confianza menor · '+r.valgN+' apoyos',val:(vg*100).toFixed(0),unit:'% del largo de pierna',
+      bandClass:vb,bandLabel:vl,desc:'Cuánto se desvía la rodilla hacia adentro respecto de la línea cadera–tobillo en el apoyo. El valgo dinámico se vincula a dolor patelofemoral y lesiones de rodilla.',
+      ref:'Umbrales provisionales: ≤8% · 8–15% · >15%. Métrica de plano frontal, límite conocido de la pose 2D.'});
+  }
+  return html;
+}
+
+/* ============================================================
+   RESUMEN + PLAN
+   ============================================================ */
+function collectFindings(){
+  const F=[]; const L=V.lat.report, R=V.rear.report;
+  if(L&&L.enough&&L.steps>=4){
+    const cad=Math.round(L.cadence);
+    if(cad<160) F.push({sev:'f-bad',key:'cadence',txt:`<b>Cadencia baja</b> (${cad} spm). Prioritario: subirla gradualmente.`});
+    else if(cad<170) F.push({sev:'f-warn',key:'cadence',txt:`<b>Cadencia mejorable</b> (${cad} spm).`});
+    else F.push({sev:'f-good',key:null,txt:`<b>Cadencia en rango</b> (${cad} spm).`});
+    const voHigh = (L.voCm!=null&&L.voCm>13)||(L.voCm==null&&L.voPct!=null&&L.voPct>8);
+    const voMid  = (L.voCm!=null&&L.voCm>9)||(L.voCm==null&&L.voPct!=null&&L.voPct>5.5);
+    if(voHigh) F.push({sev:'f-bad',key:'vo',txt:'<b>Oscilación vertical alta</b>: demasiado "rebote", carrera poco económica.'});
+    else if(voMid) F.push({sev:'f-warn',key:'vo',txt:'<b>Oscilación vertical media</b>.'});
+    if(L.overOffset!=null){ if(L.overOffset>0.30) F.push({sev:'f-bad',key:'over',txt:'<b>Overstride marcado</b>: el pie aterriza muy adelante del centro de masa.'}); else if(L.overOffset>0.15) F.push({sev:'f-warn',key:'over',txt:'<b>Overstride leve</b>.'}); }
+  }
+  if(R&&R.enough&&R.steps>=4){
+    if(R.cpd!=null){ if(R.cpd>10) F.push({sev:'f-bad',key:'hip',txt:`<b>Caída pélvica marcada</b> (${R.cpd.toFixed(0)}°): sugiere debilidad de abductores de cadera.`}); else if(R.cpd>6) F.push({sev:'f-warn',key:'hip',txt:`<b>Caída pélvica leve</b> (${R.cpd.toFixed(0)}°).`}); }
+    if(R.valgus!=null){ if(R.valgus>0.15) F.push({sev:'f-bad',key:'hip',txt:'<b>Valgo dinámico marcado</b>: la rodilla colapsa hacia adentro.'}); else if(R.valgus>0.08) F.push({sev:'f-warn',key:'hip',txt:'<b>Valgo dinámico leve</b>.'}); }
+  }
+  return F;
+}
+const EXERCISES={
+  cadence:{tgt:'Cadencia',h:'Retraining de cadencia con metrónomo',p:'Corré con un metrónomo/app a +5–10% de tu cadencia actual, en tramos cortos. Progresá de a poco varias semanas.',ev:'Evidencia: +5–10% de cadencia reduce pico de impacto y tasas de carga vertical.'},
+  vo:{tgt:'Oscilación vertical',h:'Reducir el "rebote"',p:'Cue de "correr rasante", pasos más frecuentes y suaves; sumá pliometría de bajo impacto y fuerza de tren inferior.',ev:'Menor oscilación vertical se asocia a mejor economía de carrera.'},
+  over:{tgt:'Overstride',h:'Aterrizar bajo el centro de masa',p:'Cue de aterrizar con el pie más cerca de la cadera y rodilla algo flexionada; la mayor cadencia ayuda sola a corregirlo.',ev:'Reduce fuerza de frenado y carga articular en el contacto.'},
+  hip:{tgt:'Cadera / estabilidad frontal',h:'Fuerza de abductores de cadera',p:'Clamshells, planchas laterales, abducción con banda, trabajo unipodal (single-leg). 3 series, 3–4 veces/semana.',ev:'La debilidad de abductores se vincula a caída pélvica y valgo dinámico, ambos asociados a lesión.'}
+};
+function computeIndex(F){
+  let score=100; F.forEach(f=>{ if(f.sev==='f-bad')score-=18; else if(f.sev==='f-warn')score-=8; });
+  return Math.max(30,Math.min(100,Math.round(score)));
+}
+function viewDone(v){ const r=V[v].report; return !!(r && r.enough && r.steps>=4); }
+
+function renderSummary(){
+  const latDone=viewDone('lat'), rearDone=viewDone('rear'), both=latDone&&rearDone;
+
+  // checklist de las dos tomas (siempre visible)
+  $('view-status').innerHTML =
+    `<div class="vs-row ${latDone?'ok':''}"><span class="vs-ic">${latDone?'✓':'○'}</span> Vista lateral (perfil)<span class="vs-tag">${latDone?'analizada':'pendiente'}</span></div>`+
+    `<div class="vs-row ${rearDone?'ok':''}"><span class="vs-ic">${rearDone?'✓':'○'}</span> Vista trasera (espaldas)<span class="vs-tag">${rearDone?'analizada':'pendiente'}</span></div>`;
+
+  // ninguna vista lista
+  if(!latDone && !rearDone){
+    $('sum-empty').style.display='block'; $('sum-results').classList.remove('show');
+    $('plan-empty').style.display='block'; $('plan-results').classList.remove('show');
+    $('report-block').style.display='none';
+    return;
+  }
+
+  // al menos una: mostramos lo medido
+  $('sum-empty').style.display='none'; $('sum-results').classList.add('show');
+  $('plan-empty').style.display='none'; $('plan-results').classList.add('show');
+
+  const F=collectFindings();
+  const idx=computeIndex(F);
+  const issues=F.filter(f=>f.sev!=='f-good').length;
+
+  if(both){
+    $('sum-score').textContent=idx;
+    $('sum-score').style.color = idx>=80?'var(--good)':idx>=60?'var(--warn)':'var(--bad)';
+    $('sum-scoresub').textContent = issues===0?'Sin hallazgos relevantes en lo medido.':`${issues} hallazgo(s) para trabajar. Índice orientativo, no diagnóstico.`;
+    $('report-block').style.display='block';
+  } else {
+    const missing = latDone ? 'trasera (espaldas)' : 'lateral (perfil)';
+    $('sum-score').textContent='—';
+    $('sum-score').style.color='var(--warn)';
+    $('sum-scoresub').innerHTML = `<b style="color:var(--warn)">Screening incompleto.</b> Falta la vista ${missing}. El índice completo y el reporte necesitan las dos tomas.`;
+    $('report-block').style.display='none';
+  }
+
+  $('sum-findings').innerHTML = F.length? F.map(f=>`<li class="${f.sev}">${f.txt}</li>`).join('') : '<li class="f-good">Sin hallazgos en las vistas analizadas.</li>';
+  const keys=[...new Set(F.filter(f=>f.key).map(f=>f.key))];
+  $('plan-list').innerHTML = keys.length? keys.map(k=>{const e=EXERCISES[k];return `<div class="exercise"><span class="tgt">${e.tgt}</span><h4>${e.h}</h4><p>${e.p}</p><div class="ev">${e.ev}</div></div>`;}).join('') : '<div class="empty" style="padding:20px">Sin correcciones prioritarias según lo medido. Mantené el trabajo de fuerza general.</div>';
+  updateUnlockUI();
+}
+
+/* ============================================================
+   PDF
+   ============================================================ */
+function metricRow(name,val,unit,bandClass,bandLabel){
+  const cls=bandClass==='b-good'?'pb-good':bandClass==='b-warn'?'pb-warn':'pb-bad';
+  return `<tr><td>${name}</td><td>${val} ${unit||''}</td><td class="${cls}">${bandLabel}</td></tr>`;
+}
+function buildPdf(){
+  const runner=($('rep-runner').value||'—').trim();
+  const pro=($('rep-pro').value||'').trim();
+  const date=new Date().toLocaleDateString('es-AR',{year:'numeric',month:'long',day:'numeric'});
+  const L=V.lat.report, R=V.rear.report, F=collectFindings(), idx=computeIndex(F);
+  const keys=[...new Set(F.filter(f=>f.key).map(f=>f.key))];
+  let rows='';
+  if(L&&L.enough){
+    const cad=Math.round(L.cadence);
+    rows+=metricRow('Cadencia',cad,'spm',cad>=170?'b-good':cad>=160?'b-warn':'b-bad',cad>=170?'En rango':cad>=160?'Mejorable':'Baja');
+    if(L.voCm!=null) rows+=metricRow('Oscilación vertical',L.voCm.toFixed(1),'cm (est.)',band(L.voCm,9,13),L.voCm<=9?'Eficiente':L.voCm<=13?'Media':'Alta');
+    else if(L.voPct!=null) rows+=metricRow('Oscilación vertical',L.voPct.toFixed(1),'% estatura',band(L.voPct,5.5,8),L.voPct<=5.5?'Eficiente':L.voPct<=8?'Media':'Alta');
+    if(L.overOffset!=null) rows+=metricRow('Overstride',(L.overOffset*100).toFixed(0),'% pierna',L.overOffset<=0.15?'b-good':L.overOffset<=0.30?'b-warn':'b-bad',L.overOffset<=0.15?'Neutral':L.overOffset<=0.30?'Leve':'Marcado');
+  }
+  if(R&&R.enough){
+    if(R.cpd!=null) rows+=metricRow('Caída pélvica contralateral',R.cpd.toFixed(0),'° pico',R.cpd<=6?'b-good':R.cpd<=10?'b-warn':'b-bad',R.cpd<=6?'Neutral':R.cpd<=10?'Leve':'Marcado');
+    if(R.valgus!=null) rows+=metricRow('Valgo dinámico de rodilla',(R.valgus*100).toFixed(0),'% pierna',R.valgus<=0.08?'b-good':R.valgus<=0.15?'b-warn':'b-bad',R.valgus<=0.08?'Neutral':R.valgus<=0.15?'Leve':'Marcado');
+  }
+  const plan=keys.length?keys.map(k=>{const e=EXERCISES[k];return `<div class="pex"><b>${e.h}</b> — ${e.p}<br><span style="color:#8a94a3">${e.ev}</span></div>`;}).join(''):'<p style="font-size:12px">Sin correcciones prioritarias según lo medido.</p>';
+  const findings=F.length?('<ul style="font-size:12px;margin:4px 0 0 16px">'+F.map(f=>'<li>'+f.txt+'</li>').join('')+'</ul>'):'<p style="font-size:12px">Sin hallazgos.</p>';
+  $('pdfReport').innerHTML=`
+    <h1>CORREXO · Reporte de screening biomecánico</h1>
+    <div class="pmeta">Corredor: <b>${runner}</b> · Fecha: ${date}${pro?' · Profesional: <b>'+pro+'</b>':''}</div>
+    <h2>Índice de screening: ${idx}/100</h2>
+    ${findings}
+    <h2>Métricas medidas</h2>
+    <table><thead><tr><th>Métrica</th><th>Valor</th><th>Banda</th></tr></thead><tbody>${rows||'<tr><td colspan="3">Sin datos suficientes</td></tr>'}</tbody></table>
+    <h2>Plan de coaching por evidencia</h2>
+    ${plan}
+    <div class="pdisc"><b>Aviso:</b> este reporte es un tamizaje biomecánico automatizado con fines educativos y de coaching, no un diagnóstico médico. Las mediciones provienen de estimación de pose 2D con márgenes de error conocidos y umbrales provisionales. No sustituye la evaluación de un profesional de la salud. Ante dolor, lesión o duda clínica, consultá a un kinesiólogo o médico deportivo.</div>
+    <div class="psign"><div>Firma del profesional${pro?': '+pro:''}</div><div>Fecha: ${date}</div></div>`;
+  return runner;
+}
+$('pdfBtn').addEventListener('click',()=>{
+  if(typeof html2pdf==='undefined'){ alert('No se pudo cargar el generador de PDF (sin conexión o CDN bloqueado). Reintentá con conexión.'); return; }
+  const btn=$('pdfBtn'), prev=btn.textContent;
+  btn.disabled=true; btn.textContent='Generando PDF…';
+  const runner=buildPdf();
+  const node=$('pdfReport');
+  const restore=()=>{ btn.disabled=false; btn.textContent=prev; };
+  try{
+    const p=html2pdf().set({margin:0,filename:`correxo-reporte-${(runner||'corredor').toLowerCase().replace(/\s+/g,'-')}-${new Date().toISOString().split('T')[0]}.pdf`,image:{type:'jpeg',quality:.97},html2canvas:{scale:2,backgroundColor:'#ffffff'},jsPDF:{orientation:'portrait',unit:'mm',format:'a4'}}).from(node).save();
+    if(p&&p.then) p.then(restore).catch(err=>{console.error('PDF err',err);alert('Falló la generación del PDF.');restore();});
+    else setTimeout(restore,2500);
+  }catch(err){ console.error('PDF err',err); alert('Falló la generación del PDF.'); restore(); }
+});
+
+/* ============================================================
+   COBRO (Stripe Checkout) + persistencia de estado
+   ============================================================ */
+const API_BASE='';            // mismo origen que el frontend (Vercel)
+const SKEY='correxo_state_v1';
+let UNLOCKED=false;
+
+// deja solo escalares (saca los arrays pesados) para poder persistir/restaurar
+function trimReport(r){ if(!r) return null; const {S,t,hipY,hipX,statPx,peaks,...rest}=r; return rest; }
+
+function saveState(){
+  try{
+    sessionStorage.setItem(SKEY, JSON.stringify({
+      lat:trimReport(V.lat.report), rear:trimReport(V.rear.report),
+      runner:$('rep-runner').value, pro:$('rep-pro').value, unlocked:UNLOCKED
+    }));
+  }catch(e){ console.warn('saveState',e); }
+}
+function loadState(){
+  let s=null; try{ s=JSON.parse(sessionStorage.getItem(SKEY)||'null'); }catch(e){}
+  if(!s) return;
+  if(s.lat){ V.lat.report=s.lat; renderReport('lat',s.lat); }
+  if(s.rear){ V.rear.report=s.rear; renderReport('rear',s.rear); }
+  UNLOCKED=!!s.unlocked;
+  $('rep-runner').value=s.runner||''; $('rep-pro').value=s.pro||'';
+}
+function updateUnlockUI(){
+  if(UNLOCKED){ $('unlockBtn').style.display='none'; $('pdfBtn').style.display='block'; }
+  else { $('unlockBtn').style.display='block'; $('pdfBtn').style.display='none'; }
+}
+
+async function startCheckout(){
+  const btn=$('unlockBtn'), prev=btn.textContent;
+  btn.disabled=true; btn.textContent='Redirigiendo a Stripe…'; $('pay-msg').classList.remove('show');
+  saveState();
+  try{
+    const r=await fetch(API_BASE+'/api/create-checkout-session',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.error||('HTTP '+r.status)); }
+    const j=await r.json();
+    if(j.url){ window.location.href=j.url; return; }
+    throw new Error('Respuesta inválida del servidor');
+  }catch(e){
+    console.error('checkout',e);
+    $('pay-msg').textContent='No se pudo iniciar el pago: '+e.message+'. El cobro requiere la versión desplegada con el backend; localmente los resultados en pantalla son gratuitos.';
+    $('pay-msg').classList.add('show');
+    btn.disabled=false; btn.textContent=prev;
+  }
+}
+$('unlockBtn').addEventListener('click',startCheckout);
+$('rep-runner').addEventListener('input',saveState);
+$('rep-pro').addEventListener('input',saveState);
+
+function goSummary(){
+  document.querySelector('.tab[data-tab="sum"]').click();
+}
+async function handleReturn(){
+  const p=new URLSearchParams(location.search);
+  if(p.get('paid')==='1' && p.get('session_id')){
+    try{
+      const r=await fetch(API_BASE+'/api/verify-session?session_id='+encodeURIComponent(p.get('session_id')));
+      const j=await r.json();
+      if(j&&j.paid){ UNLOCKED=true; saveState(); }
+      else { $('pay-msg').textContent='El pago no pudo confirmarse. Si se te cobró, escribinos.'; $('pay-msg').classList.add('show'); }
+    }catch(e){ console.warn('verify',e); }
+    history.replaceState({},'',location.pathname);
+    goSummary();
+  } else if(p.get('canceled')){
+    history.replaceState({},'',location.pathname);
+  }
+  updateUnlockUI();
+}
+
+/* ============================================================
+   OPERADOR (piloto): auth PIN + guardar corredor + lista + CSV
+   ============================================================ */
+const OPKEY='correxo_op_pin';
+let OP_PIN=null;
+function opHeaders(){ return OP_PIN? {'x-operator-pin':OP_PIN} : {}; }
+function showOpPanel(on){ $('op-gate').style.display=on?'none':'block'; $('op-panel').style.display=on?'block':'none'; }
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+async function opLogin(){
+  const pin=$('op-pin').value.trim(); $('op-pinerr').classList.remove('show');
+  if(!pin) return;
+  try{
+    const r=await fetch('/api/operator/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin})});
+    const j=await r.json();
+    if(j.ok){ OP_PIN=pin; try{sessionStorage.setItem(OPKEY,pin);}catch(e){} refreshOperator(); }
+    else { $('op-pinerr').textContent='PIN incorrecto.'; $('op-pinerr').classList.add('show'); }
+  }catch(e){ $('op-pinerr').textContent='No se pudo validar (¿backend disponible?).'; $('op-pinerr').classList.add('show'); }
+}
+
+function refreshOperator(){
+  if(!OP_PIN){ showOpPanel(false); return; }
+  showOpPanel(true);
+  const latDone=viewDone('lat'), rearDone=viewDone('rear');
+  $('op-status').innerHTML =
+    `<div class="vs-row ${latDone?'ok':''}"><span class="vs-ic">${latDone?'✓':'○'}</span> Vista lateral (perfil)<span class="vs-tag">${latDone?'lista':'pendiente'}</span></div>`+
+    `<div class="vs-row ${rearDone?'ok':''}"><span class="vs-ic">${rearDone?'✓':'○'}</span> Vista trasera (espaldas)<span class="vs-tag">${rearDone?'lista':'pendiente'}</span></div>`;
+  loadOpList();
+}
+
+async function loadOpList(){
+  try{
+    const r=await fetch('/api/analyses',{headers:opHeaders()});
+    if(!r.ok) throw new Error();
+    const rows=await r.json();
+    if(!rows.length){ $('op-list').innerHTML='<p class="hint">Todavía no hay corredores guardados.</p>'; return; }
+    $('op-list').innerHTML=rows.map(x=>{
+      const hh=new Date(x.created_at).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+      const conc=x.concordance?`<span class="oi-conc-${x.concordance}">concord.: ${x.concordance}</span>`:'sin concord.';
+      const vids=(x.has_perfil?'P':'–')+(x.has_trasera?'T':'–');
+      return `<div class="op-item"><div class="oi-main"><b>${escapeHtml(x.runner_name||'(sin nombre)')}</b> · índice ${x.index_score??'—'}<div class="oi-sub">${hh} · ${conc} · videos ${vids}</div></div><button class="oi-del" data-id="${x.id}">Borrar</button></div>`;
+    }).join('');
+    $('op-list').querySelectorAll('.oi-del').forEach(b=>b.addEventListener('click',()=>deleteAnalysis(b.dataset.id)));
+  }catch(e){ $('op-list').innerHTML='<p class="hint">No se pudo cargar la lista.</p>'; }
+}
+
+async function deleteAnalysis(id){
+  if(!confirm('¿Borrar este corredor y sus videos?')) return;
+  try{ await fetch('/api/analyses/'+id,{method:'DELETE',headers:opHeaders()}); loadOpList(); }catch(e){}
+}
+
+async function uploadVid(id,view,file){
+  if(!file) return;
+  const fd=new FormData(); fd.append('video',file,file.name||('video-'+view+'.mp4'));
+  await fetch('/api/analyses/'+id+'/video?view='+view,{method:'POST',headers:opHeaders(),body:fd});
+}
+
+function clearRunnerForm(){
+  ['op-name','op-height','op-age','op-notes','op-adjust'].forEach(i=>$(i).value='');
+  $('op-concord').value=''; $('op-consent').checked=false;
+}
+
+async function saveRunner(){
+  const err=$('op-saveerr'); err.classList.remove('show');
+  if(!viewDone('lat')||!viewDone('rear')){ err.textContent='Faltan análisis: necesitás la vista lateral Y la trasera antes de guardar.'; err.classList.add('show'); return; }
+  if(!$('op-name').value.trim()){ err.textContent='Poné el nombre del corredor.'; err.classList.add('show'); return; }
+  if(!$('op-consent').checked){ err.textContent='Falta el consentimiento informado del corredor.'; err.classList.add('show'); return; }
+  const btn=$('op-save'), prev=btn.textContent; btn.disabled=true; btn.textContent='Guardando…';
+  try{
+    const payload={
+      camp:$('op-camp').value.trim()||null, runner_name:$('op-name').value.trim(),
+      runner_height:parseInt($('op-height').value)||null, runner_age:parseInt($('op-age').value)||null,
+      index_score:computeIndex(collectFindings()), metrics:{lat:trimReport(V.lat.report),rear:trimReport(V.rear.report)},
+      doctor_name:$('op-docname').value.trim()||null, doctor_reg:$('op-docreg').value.trim()||null,
+      doctor_notes:$('op-notes').value.trim()||null, concordance:$('op-concord').value||null,
+      doctor_adjust:$('op-adjust').value.trim()||null, consent:true
+    };
+    const r=await fetch('/api/analyses',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},opHeaders()),body:JSON.stringify(payload)});
+    if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.error||('HTTP '+r.status)); }
+    const {id}=await r.json();
+    btn.textContent='Subiendo videos…';
+    await uploadVid(id,'perfil',V.lat.file);
+    await uploadVid(id,'trasera',V.rear.file);
+    btn.textContent='✓ Guardado'; setTimeout(()=>{ btn.disabled=false; btn.textContent=prev; },1600);
+    clearRunnerForm(); resetView('lat'); resetView('rear'); loadOpList();
+  }catch(e){ err.textContent='No se pudo guardar: '+e.message; err.classList.add('show'); btn.disabled=false; btn.textContent=prev; }
+}
+
+async function opExport(e){
+  if(e) e.preventDefault();
+  try{
+    const r=await fetch('/api/export.csv',{headers:opHeaders()});
+    const blob=await r.blob(), url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download='correxo-piloto.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  }catch(e){}
+}
+
+function initOperator(){
+  $('op-login').addEventListener('click',opLogin);
+  $('op-pin').addEventListener('keydown',e=>{ if(e.key==='Enter') opLogin(); });
+  $('op-save').addEventListener('click',saveRunner);
+  $('op-export').addEventListener('click',opExport);
+  try{ const saved=sessionStorage.getItem(OPKEY); if(saved) OP_PIN=saved; }catch(e){}
+}
+
+/* ---------- init ---------- */
+$('year').textContent=new Date().getFullYear();
+loadState();
+handleReturn();
+updateUnlockUI();
+initOperator();
+loadModel('full');
+</script>
+</body>
+</html>
