@@ -1058,7 +1058,7 @@ function setupView(view){
     video.src=URL.createObjectURL(f);
     el(view,'box').classList.add('show');
     el(view,'run').disabled=true;
-    video.onloadedmetadata=()=>{ canvas.width=video.videoWidth; canvas.height=video.videoHeight; if(modelReady) el(view,'run').disabled=false; };
+    video.onloadedmetadata=()=>{ canvas.width=video.videoWidth; canvas.height=video.videoHeight; if(video.videoWidth&&video.videoHeight) el(view,'box').style.aspectRatio=video.videoWidth+' / '+video.videoHeight; if(modelReady) el(view,'run').disabled=false; };
     el(view,'empty').style.display='block'; el(view,'results').classList.remove('show');
   }
   video.addEventListener('error',()=>{ verr.textContent='No se pudo reproducir el video (formato no soportado por el navegador). Probá con MP4 H.264 o WebM.'; verr.classList.add('show'); el(view,'run').disabled=true; });
@@ -1099,6 +1099,8 @@ async function startAnalysis(view){
   const video=el(view,'video'), ctx=el(view,'canvas').getContext('2d');
   try{ video.currentTime=0; await video.play(); }
   catch(e){ console.warn('play falló',e); el(view,'verr').textContent='El navegador bloqueó la reproducción. Tocá el video y reintentá.'; el(view,'verr').classList.add('show'); finish(view); return; }
+  // rVFC deja de dispararse al terminar el video → aseguramos finish con el evento 'ended' (y un watchdog)
+  video.onended=()=>finish(view);
   const useRVFC='requestVideoFrameCallback' in HTMLVideoElement.prototype;
   async function frame(now,meta){
     if(video.ended||video.paused){ finish(view); return; }
@@ -1120,6 +1122,8 @@ async function startAnalysis(view){
 }
 function finish(view){
   const st=V[view];
+  if(!st.analyzing) return;
+  const vid=el(view,'video'); if(vid) vid.onended=null;
   st.analyzing=false; el(view,'fill').style.width='100%'; el(view,'ptext').textContent='Listo';
   el(view,'run').disabled=false; el(view,'reset').disabled=false; $('speedMode').disabled=false;
   const isLat=(view==='lat'||view==='oplat');
@@ -1140,9 +1144,10 @@ const CONNECTIONS=[
 ];
 function drawSkeleton(ctx,canvas,keypoints){
   const m={}; keypoints.forEach(k=>m[k.name]=k);
-  ctx.clearRect(0,0,canvas.width,canvas.height); ctx.lineWidth=3; ctx.strokeStyle='#6ea0dc';
+  const sc=Math.max(2,canvas.width/280);
+  ctx.clearRect(0,0,canvas.width,canvas.height); ctx.lineWidth=sc*2.2; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.strokeStyle='#6ea0dc';
   CONNECTIONS.forEach(([a,b])=>{const ka=m[a],kb=m[b];if(ka&&kb&&(ka.score==null||ka.score>.3)&&(kb.score==null||kb.score>.3)){ctx.beginPath();ctx.moveTo(ka.x,ka.y);ctx.lineTo(kb.x,kb.y);ctx.stroke();}});
-  ctx.fillStyle='#f3743e'; keypoints.forEach(k=>{if(k.score==null||k.score>.3){ctx.beginPath();ctx.arc(k.x,k.y,5,0,Math.PI*2);ctx.fill();}});
+  ctx.fillStyle='#f3743e'; keypoints.forEach(k=>{if(k.score==null||k.score>.3){ctx.beginPath();ctx.arc(k.x,k.y,sc*2.4,0,Math.PI*2);ctx.fill();}});
 }
 
 /* ============================================================
