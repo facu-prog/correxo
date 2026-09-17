@@ -246,7 +246,7 @@ app.get('/api/export.csv', requirePin, requireDb, async (req, res) => {
 app.get('/api/health', async (req, res) => {
   let db = 'off';
   if (pool) { try { await pool.query('SELECT 1'); db = 'ok'; } catch (e) { db = 'error: ' + e.message; } }
-  res.json({ ok: true, db, videoDir: VIDEO_DIR, videoDirWritable: fs.existsSync(VIDEO_DIR), pinConfigured: !!process.env.OPERATOR_PIN });
+  res.json({ ok: true, version: require('./package.json').version, db, videoDir: VIDEO_DIR, videoDirWritable: fs.existsSync(VIDEO_DIR), pinConfigured: !!process.env.OPERATOR_PIN });
 });
 
 /* ---------- frontend estático ---------- */
