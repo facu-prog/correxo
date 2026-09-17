@@ -249,8 +249,10 @@ app.get('/api/health', async (req, res) => {
   res.json({ ok: true, version: require('./package.json').version, db, videoDir: VIDEO_DIR, videoDirWritable: fs.existsSync(VIDEO_DIR), pinConfigured: !!process.env.OPERATOR_PIN });
 });
 
-/* ---------- frontend estático ---------- */
-app.use(express.static(path.join(__dirname)));
+/* ---------- frontend estático (HTML sin caché → siempre la última versión) ---------- */
+app.use(express.static(path.join(__dirname), {
+  setHeaders: (res, p) => { if (p.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate'); }
+}));
 
 const PORT = process.env.PORT || 3000;
 initDb().finally(() => {
