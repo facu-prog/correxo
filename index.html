@@ -1151,6 +1151,23 @@ function drawSkeleton(ctx,canvas,keypoints){
   ctx.clearRect(0,0,canvas.width,canvas.height); ctx.lineWidth=sc*1.6; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.strokeStyle='#ffffff';
   CONNECTIONS.forEach(([a,b])=>{const ka=m[a],kb=m[b];if(ka&&kb&&(ka.score==null||ka.score>.3)&&(kb.score==null||kb.score>.3)){ctx.beginPath();ctx.moveTo(ka.x,ka.y);ctx.lineTo(kb.x,kb.y);ctx.stroke();}});
   ctx.fillStyle='#f3743e'; keypoints.forEach(k=>{if(k.score==null||k.score>.3){ctx.beginPath();ctx.arc(k.x,k.y,sc*1.9,0,Math.PI*2);ctx.fill();}});
+  // etiquetas de ángulo (rodillas y codos), estilo Ochy
+  const ok=k=>k&&(k.score==null||k.score>.3);
+  ['left','right'].forEach(side=>{
+    const h=m[side+'_hip'],kn=m[side+'_knee'],an=m[side+'_ankle'],sh=m[side+'_shoulder'],el=m[side+'_elbow'],wr=m[side+'_wrist'];
+    if(ok(h)&&ok(kn)&&ok(an)) drawAngleBadge(ctx,kn.x,kn.y,Math.round(angle3(h,kn,an))+'°',sc);
+    if(ok(sh)&&ok(el)&&ok(wr)) drawAngleBadge(ctx,el.x,el.y,Math.round(angle3(sh,el,wr))+'°',sc);
+  });
+}
+function drawAngleBadge(ctx,x,y,text,sc){
+  ctx.save();
+  ctx.font=`600 ${sc*6.5}px "JetBrains Mono", ui-monospace, monospace`;
+  const pad=sc*4, w=ctx.measureText(text).width+pad*2, h=sc*10, rx=x+sc*4, ry=y-h/2, r=sc*3;
+  ctx.fillStyle='rgba(243,116,62,.94)';
+  ctx.beginPath(); ctx.moveTo(rx+r,ry); ctx.arcTo(rx+w,ry,rx+w,ry+h,r); ctx.arcTo(rx+w,ry+h,rx,ry+h,r); ctx.arcTo(rx,ry+h,rx,ry,r); ctx.arcTo(rx,ry,rx+w,ry,r); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#1a0f08'; ctx.textBaseline='middle'; ctx.textAlign='left';
+  ctx.fillText(text, rx+pad, y+sc*0.5);
+  ctx.restore();
 }
 
 /* ============================================================
