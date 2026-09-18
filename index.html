@@ -1458,6 +1458,26 @@ function curvesBlock(c){
   if(!any) return '';
   return '<div class="metric" style="border-left-color:var(--blue)"><div class="top"><span class="name">📈 Curvas de ángulo articular · provisional</span></div><p class="desc" style="margin-top:2px">Evolución de cada ángulo durante el video (izquierda vs derecha). Sirve para ver ritmo, amplitud y asimetrías. La pose 2D tiene error conocido en ángulos: leer patrones, no decimales.</p>'+html+'</div>';
 }
+/* Estilo de carrera en el continuo aéreo↔terrestre (Gindre 2016; Lussiana 2019).
+   0 = terrestre (rasante, mucho apoyo), 100 = aéreo (rebote, vuelo). Provisional. */
+function computeStyle(r){
+  const g=r.gait; if(!g||!g.gaitOk||g.dutyFactor==null) return null;
+  const clamp=(x)=>Math.max(0,Math.min(100,x));
+  const parts=[], w=[];
+  // duty factor: discriminador principal (~40% terrestre → ~26% aéreo)
+  parts.push(clamp((40-g.dutyFactor)/(40-26)*100)); w.push(0.5);
+  // oscilación vertical: más rebote → más aéreo (~4% → ~9% de estatura)
+  if(r.voPct!=null){ parts.push(clamp((r.voPct-4)/(9-4)*100)); w.push(0.3); }
+  // proporción de vuelo del ciclo
+  if(g.flight!=null&&g.gct!=null&&(g.flight+g.gct)>0){ parts.push(clamp((g.flight/(g.flight+g.gct))/0.5*100)); w.push(0.2); }
+  const ws=w.reduce((a,b)=>a+b,0);
+  const score=Math.round(parts.reduce((a,p,i)=>a+p*w[i],0)/ws);
+  const label=score>=66?'Aéreo':score>=34?'Mixto':'Terrestre';
+  const desc=score>=66?'Corrés con más rebote y fase de vuelo, apoyos breves. Estilo "aéreo": rinde con zancada elástica y buena fuerza reactiva.'
+    :score>=34?'Perfil equilibrado entre rebote y contacto. La mayoría de los corredores de fondo caen acá.'
+    :'Corrés más rasante, con apoyos largos y poco rebote. Estilo "terrestre": eficiente a ritmos de fondo, se apoya en cadencia y rodaje.';
+  return {score,label,desc};
+}
 function lateralCards(r){
   let html='';
   const sc=computeScore(r);
@@ -1503,6 +1523,17 @@ function lateralCards(r){
         desc:'Diferencia de tiempo de contacto entre piernas. Una asimetría marcada es una bandera a mirar.',ref:'Umbrales provisionales: ≤5% · 5–10% · >10%.'}); }
     if(g.footStrike) html+=metricCard({name:'Patrón de pisada',val:g.footStrike,unit:'',bandClass:'b-good',bandLabel:'Descriptivo',
       desc:'Cómo apoya el pie al contacto (retro/medio/antepié). No hay un patrón "mejor": no cambia la economía (Moore 2016).',ref:'Dato descriptivo, no bueno/malo.'});
+  }
+  const style=computeStyle(r);
+  if(style){
+    const pos=style.score;
+    html+=`<div class="metric" style="border-left-color:var(--blue)"><div class="top"><span class="name">🏃 Estilo de carrera · provisional</span></div>
+      <div class="readout" style="margin:4px 0 8px"><span class="val" style="color:var(--blue)">${style.label}</span><span class="unit">${style.score}/100 hacia aéreo</span></div>
+      <div style="position:relative;height:10px;border-radius:6px;background:linear-gradient(90deg,var(--good),var(--warn),var(--accent));margin:6px 0 4px">
+        <div style="position:absolute;top:-4px;left:calc(${pos}% - 9px);width:18px;height:18px;border-radius:50%;background:var(--ink);border:3px solid var(--surface);box-shadow:0 1px 4px rgba(0,0,0,.4)"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--ink-mute)"><span>Terrestre</span><span>Mixto</span><span>Aéreo</span></div>
+      <div class="desc" style="margin-top:8px">${style.desc}</div>
+      <div class="ref">Continuo aéreo–terrestre a partir de duty factor, oscilación vertical y vuelo (Gindre 2016; Lussiana 2019). No hay estilo "mejor": cada uno es eficiente en su contexto. Provisional, a calibrar con el piloto.</div></div>`;
   }
   html+=postureCards(r.angles);
   html+=curvesBlock(r.curves);
@@ -1636,6 +1667,7 @@ function buildPdf(opts){
       if(g.symmetry!=null) rows+=metricRow('Simetría izq/der',g.symmetry.toFixed(0),'%',g.symmetry<=5?'b-good':g.symmetry<=10?'b-warn':'b-bad',g.symmetry<=5?'Simétrico':g.symmetry<=10?'Leve asimetría':'Asimetría marcada');
       if(g.footStrike) rows+=metricRow('Patrón de pisada',g.footStrike,'','b-good','Descriptivo');
     }
+    { const stl=computeStyle(L); if(stl) rows+=metricRow('Estilo de carrera',stl.label,stl.score+'/100 → aéreo','b-good','Descriptivo'); }
     if(L.angles&&L.angles.anglesN>=3){ SEGMENTS.forEach(seg=>{const v=seg.get(L.angles); if(v!=null){const st=segStatus(v,seg.good); rows+=metricRow(seg.name,v.toFixed(0),'°',st,st==='b-good'?'En rango':st==='b-warn'?'Cerca':'Fuera');}}); }
   }
   if(R&&R.enough){
