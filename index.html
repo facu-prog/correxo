@@ -1227,7 +1227,7 @@ function computeLateral(S){
   return Object.assign(b,{view:'lat',voPx,voCm,voPct,heightGiven:(heightCm>0),
     overOffset:offsets.length?median(offsets.filter(o=>o>-0.5)):null, shankAngle:shanks.length?median(shanks):null, overN:offsets.length, legLen,
     step, stride, cmPerPx,
-    gait:computeGait(b), angles:computeAngles(b)});
+    gait:computeGait(b), angles:computeAngles(b), curves:computeCurves(b)});
 }
 
 /* ---------- TRASERA ---------- */
@@ -1323,6 +1323,22 @@ function computeAngles(b){
   const med=a=>a.length?median(a):null;
   return {frontKnee:med(frontKnee),backKnee:med(backKnee),trunkLean:med(trunk),elbow:med(elbow),headAngle:med(head),anglesN:frontKnee.length};
 }
+/* ---------- CURVAS de ángulo articular por frame (L vs R), estilo Ochy ---------- */
+function computeCurves(b){
+  const S=b.S, t=[], kneeL=[],kneeR=[],hipL=[],hipR=[],elbowL=[],elbowR=[];
+  const knee=(k,side)=>{const h=k[side+'_hip'],kn=k[side+'_knee'],a=k[side+'_ankle'];return(h&&kn&&a&&h.score>.3&&kn.score>.3&&a.score>.3)?angle3(h,kn,a):null;};
+  const hip=(k,side)=>{const sh=k[side+'_shoulder'],h=k[side+'_hip'],kn=k[side+'_knee'];return(sh&&h&&kn&&sh.score>.3&&h.score>.3&&kn.score>.3)?angle3(sh,h,kn):null;};
+  const elb=(k,side)=>{const sh=k[side+'_shoulder'],e=k[side+'_elbow'],w=k[side+'_wrist'];return(sh&&e&&w&&sh.score>.3&&e.score>.3&&w.score>.3)?angle3(sh,e,w):null;};
+  S.forEach(s=>{ const k=s.kp; t.push(s.t);
+    kneeL.push(knee(k,'left')); kneeR.push(knee(k,'right'));
+    hipL.push(hip(k,'left'));  hipR.push(hip(k,'right'));
+    elbowL.push(elb(k,'left')); elbowR.push(elb(k,'right')); });
+  const sm=a=>smoothNulls(a,2);
+  const cov=a=>a.length?a.filter(v=>v!=null).length/a.length:0;
+  return {t, kneeL:sm(kneeL),kneeR:sm(kneeR),hipL:sm(hipL),hipR:sm(hipR),elbowL:sm(elbowL),elbowR:sm(elbowR),
+    cov:{knee:Math.min(cov(kneeL),cov(kneeR)),hip:Math.min(cov(hipL),cov(hipR)),elbow:Math.min(cov(elbowL),cov(elbowR))}};
+}
+function smoothNulls(a,w){const r=[];for(let i=0;i<a.length;i++){let s=0,c=0;for(let j=Math.max(0,i-w);j<=Math.min(a.length-1,i+w);j++){if(a[j]!=null){s+=a[j];c++;}}r.push(c?s/c:null);}return r;}
 
 /* ---------- helpers de señal ---------- */
 function movingAverage(a,w){const r=[];for(let i=0;i<a.length;i++){let s=0,c=0;for(let j=Math.max(0,i-w);j<=Math.min(a.length-1,i+w);j++){s+=a[j];c++;}r.push(s/c);}return r;}
@@ -1414,6 +1430,34 @@ function computeScore(r){
   if(r.angles) SEGMENTS.forEach(seg=>{const v=seg.get(r.angles); if(v!=null){const st=segStatus(v,seg.good); parts.push(st==='b-good'?100:st==='b-warn'?65:35);}});
   return parts.length?Math.round(parts.reduce((x,y)=>x+y,0)/parts.length):null;
 }
+function angleCurveSvg(title,sub,t,sL,sR){
+  const W=520,H=150,padL=36,padR=12,padT=14,padB=22, iw=W-padL-padR, ih=H-padT-padB;
+  const vals=[...sL,...sR].filter(v=>v!=null); if(vals.length<6) return '';
+  const t0=t[0], span=(t[t.length-1]-t0)||1;
+  let ymin=Math.min(...vals), ymax=Math.max(...vals); const pad=(ymax-ymin)*0.12||5; ymin-=pad; ymax+=pad;
+  const X=tt=>padL+(tt-t0)/span*iw, Y=v=>padT+ih-(v-ymin)/((ymax-ymin)||1)*ih;
+  const path=s=>{let d='',pen=false;for(let i=0;i<s.length;i++){if(s[i]==null){pen=false;continue;}d+=(pen?'L':'M')+X(t[i]).toFixed(1)+' '+Y(s[i]).toFixed(1)+' ';pen=true;}return d;};
+  const grid=[]; for(let g=0;g<=3;g++){const v=ymin+(ymax-ymin)*g/3, yy=Y(v); grid.push(`<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${W-padR}" y2="${yy.toFixed(1)}" stroke="var(--line)" stroke-width="1"/><text x="${padL-5}" y="${(yy+3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--ink-mute)">${Math.round(v)}°</text>`);}
+  return `<div style="margin-top:10px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap">
+    <span class="name" style="font-size:.92rem">${title}</span>
+    <span style="font-size:.72rem;color:var(--ink-mute)"><span style="color:var(--blue)">■</span> Izquierda&nbsp;&nbsp;<span style="color:var(--accent)">■</span> Derecha</span></div>
+    <p class="desc" style="margin:2px 0 4px">${sub}</p>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${grid.join('')}
+      <path d="${path(sR)}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" opacity=".9"/>
+      <path d="${path(sL)}" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" opacity=".9"/>
+      <text x="${padL}" y="${H-6}" font-size="9" fill="var(--ink-mute)">0 s</text>
+      <text x="${W-padR}" y="${H-6}" text-anchor="end" font-size="9" fill="var(--ink-mute)">${span.toFixed(1)} s</text></svg></div>`;
+}
+function curvesBlock(c){
+  if(!c) return '';
+  let html='', any=false;
+  const add=(cov,title,sub,sL,sR)=>{ if(cov>=0.5){ const s=angleCurveSvg(title,sub,c.t,sL,sR); if(s){html+=s;any=true;} } };
+  add(c.cov.knee,'Rodilla — flexión/extensión','Ángulo cadera–rodilla–tobillo a lo largo del clip. Compará el patrón y la simetría entre piernas.',c.kneeL,c.kneeR);
+  add(c.cov.hip,'Cadera — flexión','Ángulo hombro–cadera–rodilla (flexión de cadera) por ciclo.',c.hipL,c.hipR);
+  add(c.cov.elbow,'Codo — flexión','Ángulo hombro–codo–muñeca; el brazo debería mantener un rango estable.',c.elbowL,c.elbowR);
+  if(!any) return '';
+  return '<div class="metric" style="border-left-color:var(--blue)"><div class="top"><span class="name">📈 Curvas de ángulo articular · provisional</span></div><p class="desc" style="margin-top:2px">Evolución de cada ángulo durante el video (izquierda vs derecha). Sirve para ver ritmo, amplitud y asimetrías. La pose 2D tiene error conocido en ángulos: leer patrones, no decimales.</p>'+html+'</div>';
+}
 function lateralCards(r){
   let html='';
   const sc=computeScore(r);
@@ -1461,6 +1505,7 @@ function lateralCards(r){
       desc:'Cómo apoya el pie al contacto (retro/medio/antepié). No hay un patrón "mejor": no cambia la economía (Moore 2016).',ref:'Dato descriptivo, no bueno/malo.'});
   }
   html+=postureCards(r.angles);
+  html+=curvesBlock(r.curves);
   return html;
 }
 function rearCards(r){
