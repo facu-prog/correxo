@@ -129,6 +129,17 @@ app.post('/api/operator/login', (req, res) => {
   res.json({ ok: !!pin && String(pin) === String(process.env.OPERATOR_PIN) });
 });
 
+// gate de acceso al ANÁLISIS (previo a la etapa de pago): solo usuarios habilitados.
+// Códigos válidos = ACCESS_CODES (separados por coma) con fallback a OPERATOR_PIN.
+app.post('/api/access/login', (req, res) => {
+  const code = req.body && req.body.code;
+  const raw = process.env.ACCESS_CODES || process.env.OPERATOR_PIN || '';
+  const codes = String(raw).split(',').map(s => s.trim()).filter(Boolean);
+  const ok = !!code && codes.includes(String(code).trim());
+  if (!ok) return res.status(401).json({ ok: false });
+  res.json({ ok: true, token: Buffer.from('cx:' + Date.now()).toString('base64') });
+});
+
 // crear un análisis (datos del corredor + métricas + revisión médica)
 app.post('/api/analyses', requirePin, requireDb, async (req, res) => {
   const b = req.body || {};

@@ -457,6 +457,22 @@
   .op-cap-h span{font-family:var(--mono);font-size:.64rem;color:var(--ink-mute);text-transform:uppercase;letter-spacing:.08em}
   .op-cap .drop{padding:16px 12px}
   .op-cap .video-box{margin-top:10px}
+  /* ---- Pantalla de análisis separada + gate de acceso ---- */
+  .screen{position:fixed;inset:0;z-index:1000;background:var(--bg);overflow-y:auto;overscroll-behavior:contain}
+  .screen-bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;padding:12px 18px;background:var(--surface);border-bottom:1px solid var(--line)}
+  .screen-bar .logo{font-weight:700;font-size:.98rem}
+  .screen-bar .back{margin-left:auto;background:var(--surface-2);border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:8px 14px;cursor:pointer;font-size:.9rem}
+  .screen-bar .back:hover{border-color:var(--line-strong)}
+  .screen-inner{max-width:var(--maxw);margin:0 auto;padding:14px 16px 60px}
+  .gate-card{max-width:420px;margin:9vh auto 0;background:var(--surface-2);border:1px solid var(--line);border-radius:16px;padding:30px 26px;text-align:center}
+  .gate-card h2{font-family:var(--display);font-size:1.5rem;margin:8px 0 4px}
+  .gate-card>p{color:var(--ink-soft);font-size:.92rem;margin:0 0 18px;line-height:1.5}
+  .gate-card input{width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--line-strong);border-radius:10px;padding:13px 14px;color:var(--ink);font-size:1.05rem;text-align:center;letter-spacing:.12em;font-family:var(--mono)}
+  .gate-card input:focus{outline:none;border-color:var(--accent)}
+  .gate-btn{width:100%;margin-top:12px;background:var(--accent);color:#1a0f08;border:none;border-radius:10px;padding:13px;font-weight:700;font-size:1rem;cursor:pointer}
+  .gate-btn:disabled{opacity:.6;cursor:default}
+  .gate-err{color:var(--bad);font-size:.85rem;margin-top:10px;min-height:1.1em}
+  .gate-note{color:var(--ink-mute);font-size:.78rem;margin-top:16px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -768,6 +784,26 @@
 </div></section>
 
 <!-- ============ APP ============ -->
+<!-- ============ GATE DE ACCESO ============ -->
+<div id="gate" class="screen" hidden>
+  <div class="screen-bar"><span class="logo">📊 CORREXO</span><button class="back" onclick="closeApp()">← Volver</button></div>
+  <div class="gate-card">
+    <div style="font-size:2rem">🔒</div>
+    <h2>Acceso al análisis</h2>
+    <p>El análisis está disponible solo para usuarios habilitados. Ingresá tu código de acceso para continuar.</p>
+    <form id="gateForm" autocomplete="off">
+      <input id="gateCode" type="password" inputmode="numeric" autocomplete="off" placeholder="Código de acceso" aria-label="Código de acceso">
+      <button type="submit" class="gate-btn" id="gateBtn">Entrar</button>
+      <div class="gate-err" id="gateErr"></div>
+    </form>
+    <div class="gate-note">¿No tenés código todavía? Escribinos para sumarte al piloto. El pago por análisis estará disponible pronto.</div>
+  </div>
+</div>
+
+<!-- ============ PANTALLA DE ANÁLISIS (separada de la landing) ============ -->
+<div id="appScreen" class="screen" hidden>
+  <div class="screen-bar"><span class="logo">📊 CORREXO · Análisis</span><button class="back" onclick="closeApp()">← Volver a la web</button></div>
+  <div class="screen-inner">
 <section class="section tight" id="analizar">
   <div class="kicker">Probalo ahora</div>
   <h2 class="sec-title">Analizá tu carrera</h2>
@@ -954,6 +990,8 @@
     </details>
   </div>
 </div>
+  </div><!-- /.screen-inner -->
+</div><!-- /#appScreen -->
 
 <!-- ============ PRECIO ============ -->
 <section class="section pricing" id="precio">
@@ -2210,8 +2248,32 @@ loadState();
 handleReturn();
 updateUnlockUI();
 initOperator();
-loadModel('full');
 fetch('/api/health').then(r=>r.json()).then(j=>{ if(j&&j.version&&$('appver')) $('appver').textContent='v'+j.version; }).catch(()=>{});
+
+/* ---------- Gate de acceso + pantalla de análisis separada ---------- */
+let _modelKicked=false;
+function ensureModel(){ if(_modelKicked) return; _modelKicked=true; loadModel('full'); }
+function isAuthed(){ try{ return sessionStorage.getItem('cx_auth')==='1'; }catch(e){ return false; } }
+function showScreen(id){ ['gate','appScreen'].forEach(s=>{ const e=$(s); if(e) e.hidden=(s!==id); }); document.body.style.overflow=id?'hidden':''; if(id) window.scrollTo(0,0); }
+function openApp(){ if(isAuthed()){ ensureModel(); showScreen('appScreen'); } else { showScreen('gate'); setTimeout(()=>{ try{$('gateCode').focus();}catch(e){} },60); } }
+function closeApp(){ showScreen(null); }
+// todos los CTA que apuntaban a #analizar ahora abren la pantalla (con gate)
+document.querySelectorAll('a[href="#analizar"]').forEach(a=>a.addEventListener('click',e=>{ e.preventDefault(); openApp(); }));
+$('gateForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const code=$('gateCode').value.trim(), btn=$('gateBtn'), err=$('gateErr');
+  if(!code){ err.textContent='Ingresá tu código.'; return; }
+  btn.disabled=true; btn.textContent='Validando…'; err.textContent='';
+  try{
+    const r=await fetch('/api/access/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
+    const j=await r.json().catch(()=>({}));
+    if(r.ok && j.ok){ try{ sessionStorage.setItem('cx_auth','1'); }catch(e){} $('gateCode').value=''; ensureModel(); showScreen('appScreen'); }
+    else { err.textContent='Código incorrecto.'; }
+  }catch(err2){ err.textContent='No se pudo validar (revisá tu conexión).'; }
+  btn.disabled=false; btn.textContent='Entrar';
+});
+// deep-link viejo (#analizar) → abre la pantalla
+if(location.hash==='#analizar'){ history.replaceState(null,'',location.pathname); openApp(); }
 </script>
 </body>
 </html>
