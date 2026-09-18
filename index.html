@@ -1201,7 +1201,7 @@ function computeLateral(S){
   });
   return Object.assign(b,{view:'lat',voPx,voCm,voPct,heightGiven:(heightCm>0),
     overOffset:offsets.length?median(offsets.filter(o=>o>-0.5)):null, shankAngle:shanks.length?median(shanks):null, overN:offsets.length, legLen,
-    gait:computeGait(b)});
+    gait:computeGait(b), angles:computeAngles(b)});
 }
 
 /* ---------- TRASERA ---------- */
@@ -1269,6 +1269,35 @@ function computeGait(b){
   return {gaitOk:true,gct,gctL,gctR,symmetry,dutyFactor,flight,footStrike,gctN:allGct.length};
 }
 
+/* ---------- POSTURA: ángulos articulares al apoyo (estilo Ochy) ---------- */
+function angle3(a,b,c){ // ángulo en b (grados, 0-180)
+  const v1x=a.x-b.x,v1y=a.y-b.y,v2x=c.x-b.x,v2y=c.y-b.y;
+  const d=(v1x*v2x+v1y*v2y)/((Math.hypot(v1x,v1y)*Math.hypot(v2x,v2y))||1);
+  return Math.acos(Math.max(-1,Math.min(1,d)))*180/Math.PI;
+}
+function computeAngles(b){
+  const S=b.S;
+  let fwdSum=0,fwdVotes=0;
+  S.forEach(s=>['left','right'].forEach(side=>{const fi=s.kp[side+'_foot_index'],he=s.kp[side+'_heel'];if(fi&&he&&fi.score>.3&&he.score>.3){fwdSum+=Math.sign(fi.x-he.x);fwdVotes++;}}));
+  const fwd=fwdVotes?(Math.sign(fwdSum)||1):1;
+  const frontKnee=[],backKnee=[],trunk=[],elbow=[],head=[];
+  b.peaks.forEach(pi=>{
+    const tp=b.t[pi]; let best=null,bd=1e9; S.forEach(s=>{const d=Math.abs(s.t-tp);if(d<bd){bd=d;best=s;}}); if(!best)return;
+    const k=best.kp;
+    let front=null,fy=-1; ['left','right'].forEach(side=>{const a=k[side+'_ankle'];if(a&&a.score>.3&&a.y>fy){fy=a.y;front=side;}}); if(!front)return;
+    const back=front==='left'?'right':'left';
+    const knee=(side)=>{const h=k[side+'_hip'],kn=k[side+'_knee'],a=k[side+'_ankle'];return (h&&kn&&a&&h.score>.3&&kn.score>.3&&a.score>.3)?angle3(h,kn,a):null;};
+    const fk=knee(front), bk=knee(back);
+    if(fk!=null)frontKnee.push(fk); if(bk!=null)backKnee.push(bk);
+    const lh=k['left_hip'],rh=k['right_hip'],ls=k['left_shoulder'],rs=k['right_shoulder'];
+    if(lh&&rh&&ls&&rs&&lh.score>.3&&rh.score>.3&&ls.score>.3&&rs.score>.3){const hx=(lh.x+rh.x)/2,hy=(lh.y+rh.y)/2,sx=(ls.x+rs.x)/2,sy=(ls.y+rs.y)/2; trunk.push(Math.atan2((sx-hx)*fwd,(hy-sy))*180/Math.PI);}
+    ['left','right'].forEach(side=>{const s=k[side+'_shoulder'],e=k[side+'_elbow'],w=k[side+'_wrist'];if(s&&e&&w&&s.score>.3&&e.score>.3&&w.score>.3)elbow.push(angle3(s,e,w));});
+    const nose=k['nose']; if(nose&&nose.score>.3&&ls&&rs&&ls.score>.3&&rs.score>.3){const sx=(ls.x+rs.x)/2,sy=(ls.y+rs.y)/2; head.push(Math.atan2((nose.x-sx)*fwd,(sy-nose.y))*180/Math.PI);}
+  });
+  const med=a=>a.length?median(a):null;
+  return {frontKnee:med(frontKnee),backKnee:med(backKnee),trunkLean:med(trunk),elbow:med(elbow),headAngle:med(head),anglesN:frontKnee.length};
+}
+
 /* ---------- helpers de señal ---------- */
 function movingAverage(a,w){const r=[];for(let i=0;i<a.length;i++){let s=0,c=0;for(let j=Math.max(0,i-w);j<=Math.min(a.length-1,i+w);j++){s+=a[j];c++;}r.push(s/c);}return r;}
 function movingAverageTime(t,a,win){const r=[];for(let i=0;i<a.length;i++){let s=0,c=0;for(let j=0;j<a.length;j++){if(Math.abs(t[j]-t[i])<=win/2){s+=a[j];c++;}}r.push(c?s/c:a[i]);}return r;}
@@ -1320,8 +1349,49 @@ function renderReport(view,r){
   el(view,'metrics').innerHTML = view==='lat' ? lateralCards(r) : rearCards(r);
 }
 
+const SEGMENTS=[
+ {key:'frontKnee',name:'Rodilla delantera al apoyo',unit:'°',good:[135,180],get:a=>a.frontKnee,
+   ok:'Ángulo ideal: buena eficiencia y menor riesgo de lesión.',
+   bad:'Rodilla delantera muy flexionada al contacto: pierde eficiencia y sube el riesgo.',
+   tip:'Imaginá un hilo que tira suave de la rodilla hacia arriba en cada paso.'},
+ {key:'backKnee',name:'Rodilla trasera al apoyo',unit:'°',good:[0,91],get:a=>a.backKnee,
+   ok:'Buen "efecto muelle": rodilla flexionada, zancada más completa y económica.',
+   bad:'Rodilla trasera poco flexionada: pie más rasante, menos elasticidad.',
+   tip:'Cerrá un poco más la pierna de atrás para ganar elasticidad.'},
+ {key:'trunkLean',name:'Inclinación del tronco',unit:'°',good:[5,11],get:a=>a.trunkLean,
+   ok:'Tronco idealmente inclinado hacia adelante: buen equilibrio de la zancada.',
+   bad:'Tronco fuera del rango ideal: puede desequilibrar la zancada.',
+   tip:'Pensá el torso como una torre alineada, ligeramente inclinada al frente.'},
+ {key:'elbow',name:'Ángulo del brazo (codo)',unit:'°',good:[75,85],get:a=>a.elbow,
+   ok:'Codo en buen ángulo: brazos con buena amplitud.',
+   bad:'Codo muy cerrado o muy abierto: limita el balanceo y la coordinación.',
+   tip:'Relajá hombros, abrí los puños y balanceá los brazos adelante y atrás.'},
+ {key:'headAngle',name:'Posición de la cabeza',unit:'°',good:[-8,2],get:a=>a.headAngle,
+   ok:'Cabeza bien colocada: buen equilibrio visual y trayectoria estable.',
+   bad:'Cabeza fuera de posición: afecta el equilibrio y la trayectoria.',
+   tip:'Fijá la mirada como un láser en un punto del horizonte.'},
+];
+function segStatus(v,good){ if(v==null)return null; const lo=good[0],hi=good[1]; if(v>=lo&&v<=hi)return 'b-good'; const m=v<lo?lo-v:v-hi, span=(hi-lo)||10; return m<=span*0.5?'b-warn':'b-bad'; }
+function postureCards(a){
+  if(!a||a.anglesN<3) return '';
+  let html='<div class="metric" style="border-left-color:var(--blue)"><div class="top"><span class="name">🧍 Postura y ángulos al apoyo · provisional</span></div><p class="desc" style="margin-top:2px">Ángulos articulares en el apoyo. Rangos de referencia (ejemplos Ochy; Folland 2017), a calibrar con el piloto.</p></div>';
+  SEGMENTS.forEach(seg=>{ const v=seg.get(a); if(v==null)return; const st=segStatus(v,seg.good), inR=st==='b-good';
+    html+=metricCard({name:seg.name,val:v.toFixed(0),unit:seg.unit,bandClass:st,bandLabel:inR?'En rango':st==='b-warn'?'Cerca':'Fuera',
+      desc:(inR?seg.ok:seg.bad)+' <b>Consejo:</b> '+seg.tip,ref:'Rango bueno: '+seg.good[0]+'–'+seg.good[1]+seg.unit+'. Provisional.'}); });
+  return html;
+}
+function computeScore(r){
+  const parts=[]; const cad=r.cadence;
+  if(cad) parts.push(cad>=170?100:cad>=160?70:45);
+  if(r.overOffset!=null) parts.push(r.overOffset<=0.15?100:r.overOffset<=0.30?65:35);
+  if(r.voPct!=null) parts.push(r.voPct<=5.5?100:r.voPct<=8?70:45);
+  if(r.angles) SEGMENTS.forEach(seg=>{const v=seg.get(r.angles); if(v!=null){const st=segStatus(v,seg.good); parts.push(st==='b-good'?100:st==='b-warn'?65:35);}});
+  return parts.length?Math.round(parts.reduce((x,y)=>x+y,0)/parts.length):null;
+}
 function lateralCards(r){
   let html='';
+  const sc=computeScore(r);
+  if(sc!=null) html+=`<div class="scorecard" style="margin-bottom:16px"><div class="big" style="color:${sc>=75?'var(--good)':sc>=55?'var(--warn)':'var(--bad)'}">${sc}%</div><div class="lab">Puntuación de análisis</div></div>`;
   const cad=Math.round(r.cadence);
   html+=metricCard({name:'Cadencia',conf:'Confianza alta',val:cad,unit:'pasos/min',
     bandClass:cad>=170?'b-good':cad>=160?'b-warn':'b-bad',bandLabel:cad>=170?'En rango':cad>=160?'Mejorable':'Baja',
@@ -1356,6 +1426,7 @@ function lateralCards(r){
     if(g.footStrike) html+=metricCard({name:'Patrón de pisada',val:g.footStrike,unit:'',bandClass:'b-good',bandLabel:'Descriptivo',
       desc:'Cómo apoya el pie al contacto (retro/medio/antepié). No hay un patrón "mejor": no cambia la economía (Moore 2016).',ref:'Dato descriptivo, no bueno/malo.'});
   }
+  html+=postureCards(r.angles);
   return html;
 }
 function rearCards(r){
