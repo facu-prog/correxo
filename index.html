@@ -1217,9 +1217,10 @@ function drawSkeleton(ctx,canvas,keypoints){
   // etiquetas de ángulo (rodillas y codos), estilo Ochy
   const ok=k=>k&&(k.score==null||k.score>.3);
   ['left','right'].forEach(side=>{
-    const h=m[side+'_hip'],kn=m[side+'_knee'],an=m[side+'_ankle'],sh=m[side+'_shoulder'],el=m[side+'_elbow'],wr=m[side+'_wrist'];
+    const h=m[side+'_hip'],kn=m[side+'_knee'],an=m[side+'_ankle'],fo=m[side+'_foot_index'],sh=m[side+'_shoulder'],el=m[side+'_elbow'],wr=m[side+'_wrist'];
     if(ok(h)&&ok(kn)&&ok(an)) drawAngleBadge(ctx,kn.x,kn.y,Math.round(angle3(h,kn,an))+'°',sc);
     if(ok(sh)&&ok(el)&&ok(wr)) drawAngleBadge(ctx,el.x,el.y,Math.round(angle3(sh,el,wr))+'°',sc);
+    if(ok(kn)&&ok(an)&&ok(fo)) drawAngleBadge(ctx,an.x,an.y,Math.round(angle3(kn,an,fo))+'°',sc);
   });
 }
 function drawAngleBadge(ctx,x,y,text,sc){
@@ -1388,18 +1389,22 @@ function computeAngles(b){
 }
 /* ---------- CURVAS de ángulo articular por frame (L vs R), estilo Ochy ---------- */
 function computeCurves(b){
-  const S=b.S, t=[], kneeL=[],kneeR=[],hipL=[],hipR=[],elbowL=[],elbowR=[];
+  const S=b.S, t=[], kneeL=[],kneeR=[],hipL=[],hipR=[],elbowL=[],elbowR=[],ankL=[],ankR=[],shL=[],shR=[];
   const knee=(k,side)=>{const h=k[side+'_hip'],kn=k[side+'_knee'],a=k[side+'_ankle'];return(h&&kn&&a&&h.score>.3&&kn.score>.3&&a.score>.3)?angle3(h,kn,a):null;};
   const hip=(k,side)=>{const sh=k[side+'_shoulder'],h=k[side+'_hip'],kn=k[side+'_knee'];return(sh&&h&&kn&&sh.score>.3&&h.score>.3&&kn.score>.3)?angle3(sh,h,kn):null;};
   const elb=(k,side)=>{const sh=k[side+'_shoulder'],e=k[side+'_elbow'],w=k[side+'_wrist'];return(sh&&e&&w&&sh.score>.3&&e.score>.3&&w.score>.3)?angle3(sh,e,w):null;};
+  const ankle=(k,side)=>{const kn=k[side+'_knee'],a=k[side+'_ankle'],f=k[side+'_foot_index'];return(kn&&a&&f&&kn.score>.3&&a.score>.3&&f.score>.3)?angle3(kn,a,f):null;};
+  const shou=(k,side)=>{const h=k[side+'_hip'],sh=k[side+'_shoulder'],e=k[side+'_elbow'];return(h&&sh&&e&&h.score>.3&&sh.score>.3&&e.score>.3)?angle3(h,sh,e):null;};
   S.forEach(s=>{ const k=s.kp; t.push(s.t);
     kneeL.push(knee(k,'left')); kneeR.push(knee(k,'right'));
     hipL.push(hip(k,'left'));  hipR.push(hip(k,'right'));
-    elbowL.push(elb(k,'left')); elbowR.push(elb(k,'right')); });
+    elbowL.push(elb(k,'left')); elbowR.push(elb(k,'right'));
+    ankL.push(ankle(k,'left')); ankR.push(ankle(k,'right'));
+    shL.push(shou(k,'left')); shR.push(shou(k,'right')); });
   const sm=a=>smoothNulls(a,2);
   const cov=a=>a.length?a.filter(v=>v!=null).length/a.length:0;
-  return {t, kneeL:sm(kneeL),kneeR:sm(kneeR),hipL:sm(hipL),hipR:sm(hipR),elbowL:sm(elbowL),elbowR:sm(elbowR),
-    cov:{knee:Math.min(cov(kneeL),cov(kneeR)),hip:Math.min(cov(hipL),cov(hipR)),elbow:Math.min(cov(elbowL),cov(elbowR))}};
+  return {t, kneeL:sm(kneeL),kneeR:sm(kneeR),hipL:sm(hipL),hipR:sm(hipR),elbowL:sm(elbowL),elbowR:sm(elbowR),ankL:sm(ankL),ankR:sm(ankR),shL:sm(shL),shR:sm(shR),
+    cov:{knee:Math.min(cov(kneeL),cov(kneeR)),hip:Math.min(cov(hipL),cov(hipR)),elbow:Math.min(cov(elbowL),cov(elbowR)),ankle:Math.min(cov(ankL),cov(ankR)),shoulder:Math.min(cov(shL),cov(shR))}};
 }
 function smoothNulls(a,w){const r=[];for(let i=0;i<a.length;i++){let s=0,c=0;for(let j=Math.max(0,i-w);j<=Math.min(a.length-1,i+w);j++){if(a[j]!=null){s+=a[j];c++;}}r.push(c?s/c:null);}return r;}
 
@@ -1494,55 +1499,82 @@ const SEGMENTS=[
 function segStatus(v,good){ if(v==null)return null; const lo=good[0],hi=good[1]; if(v>=lo&&v<=hi)return 'b-good'; const m=v<lo?lo-v:v-hi, span=(hi-lo)||10; return m<=span*0.5?'b-warn':'b-bad'; }
 /* ---- Ilustraciones anatómicas por segmento (estilo Ochy): miembros rellenos + ideal punteado ---- */
 function segStroke(cls){return cls==='b-good'?'var(--good)':cls==='b-warn'?'var(--warn)':'var(--bad)';}
-function angBadge(x,y,A){return `<rect x="${x}" y="${y-13}" width="46" height="24" rx="6" fill="var(--accent)"/><text x="${x+23}" y="${y+4}" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="15" font-weight="700" fill="#1a0f08">${Math.round(A)}°</text>`;}
-function shoePath(ax,ay,col){return `<path d="M${ax-10} ${ay+6} Q${ax-13} ${ay+15} ${ax-2} ${ay+16} L${ax+30} ${ay+16} Q${ax+40} ${ay+16} ${ax+38} ${ay+7} L${ax+28} ${ay+2} Q${ax+8} ${ay-2} ${ax-10} ${ay+6} Z" fill="${col}"/>`;}
-function illusLeg(A,cls,good){ // pierna de perfil, rodilla en A
-  const col=segStroke(cls), hip=[92,30], knee=[92,118], Lc=74;
-  const rad=(A-90)*Math.PI/180, ank=[knee[0]+Lc*Math.cos(rad), knee[1]+Lc*Math.sin(rad)];
-  const gm=(good[0]+good[1])/2, irad=(gm-90)*Math.PI/180, iank=[knee[0]+Lc*Math.cos(irad), knee[1]+Lc*Math.sin(irad)];
-  return `<svg viewBox="0 0 200 220" width="100%" style="max-width:190px">
-    <line x1="92" y1="14" x2="92" y2="212" stroke="var(--line-strong)" stroke-width="1.5" stroke-dasharray="3 6"/>
-    <path d="M${knee[0]} ${knee[1]} L${iank[0].toFixed(1)} ${iank[1].toFixed(1)}" stroke="var(--ink-mute)" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 7" opacity=".7"/>
-    <path d="M${hip[0]} ${hip[1]} L${knee[0]} ${knee[1]}" stroke="${col}" stroke-width="26" stroke-linecap="round"/>
-    <path d="M${knee[0]} ${knee[1]} L${ank[0].toFixed(1)} ${ank[1].toFixed(1)}" stroke="${col}" stroke-width="20" stroke-linecap="round"/>
-    ${shoePath(ank[0],ank[1],col)}
-    <circle cx="${knee[0]}" cy="${knee[1]}" r="7" fill="#1a0f08" opacity=".25"/>
-    ${angBadge(knee[0]+16,knee[1],A)}</svg>`;
+function angBadge(x,y,A){return `<rect x="${x}" y="${y-13}" width="48" height="24" rx="6" fill="var(--accent)"/><text x="${x+24}" y="${y+4}" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="15" font-weight="700" fill="#1a0f08">${Math.round(A)}°</text>`;}
+// miembro relleno cónico (silueta anatómica) entre dos articulaciones
+function limb(a,b,w1,w2,col){
+  const dx=b[0]-a[0],dy=b[1]-a[1],len=Math.hypot(dx,dy)||1,nx=-dy/len,ny=dx/len;
+  const p=(x,y)=>x.toFixed(1)+' '+y.toFixed(1);
+  return `<path d="M${p(a[0]+nx*w1,a[1]+ny*w1)} L${p(b[0]+nx*w2,b[1]+ny*w2)} L${p(b[0]-nx*w2,b[1]-ny*w2)} L${p(a[0]-nx*w1,a[1]-ny*w1)} Z" fill="${col}"/>`+
+    `<circle cx="${a[0].toFixed(1)}" cy="${a[1].toFixed(1)}" r="${w1}" fill="${col}"/><circle cx="${b[0].toFixed(1)}" cy="${b[1].toFixed(1)}" r="${w2}" fill="${col}"/>`;
 }
-function illusArm(A,cls,good){ const col=segStroke(cls), sh=[74,34], el=[74,110], Lf=60;
-  const rad=(A-90)*Math.PI/180, wr=[el[0]+Lf*Math.cos(rad), el[1]+Lf*Math.sin(rad)];
-  const gm=(good[0]+good[1])/2, irad=(gm-90)*Math.PI/180, iwr=[el[0]+Lf*Math.cos(irad), el[1]+Lf*Math.sin(irad)];
-  return `<svg viewBox="0 0 200 200" width="100%" style="max-width:180px">
-    <path d="M${el[0]} ${el[1]} L${iwr[0].toFixed(1)} ${iwr[1].toFixed(1)}" stroke="var(--ink-mute)" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 7" opacity=".7"/>
-    <path d="M${sh[0]} ${sh[1]} L${el[0]} ${el[1]}" stroke="${col}" stroke-width="22" stroke-linecap="round"/>
-    <path d="M${el[0]} ${el[1]} L${wr[0].toFixed(1)} ${wr[1].toFixed(1)}" stroke="${col}" stroke-width="17" stroke-linecap="round"/>
-    <circle cx="${wr[0].toFixed(1)}" cy="${wr[1].toFixed(1)}" r="11" fill="${col}"/>
-    <circle cx="${el[0]}" cy="${el[1]}" r="6" fill="#1a0f08" opacity=".25"/>
-    ${angBadge(el[0]+14,el[1],A)}</svg>`;
+function shoeAt(x,y,dir){ // zapatilla de running (silueta oscura + suela acento)
+  const s=dir||1;
+  return `<g><path d="M${x-9} ${y-4} Q${x-15} ${y+5} ${x-6} ${y+9} L${x+26*s} ${y+9} Q${x+40*s} ${y+9} ${x+37*s} ${y} L${x+28*s} ${y-5} Q${x+8*s} ${y-8} ${x-9} ${y-4} Z" fill="#2b3140"/>`+
+    `<path d="M${x-8} ${y+8} L${x+38*s} ${y+8} Q${x+41*s} ${y+8} ${x+40*s} ${y+11} L${x-8} ${y+11} Z" fill="#e2603a"/></g>`;
 }
-function illusTrunk(A,cls,good){ const col=segStroke(cls), hip=[100,192], Lt=118;
-  const rad=A*Math.PI/180, sh=[hip[0]+Lt*Math.sin(rad), hip[1]-Lt*Math.cos(rad)], head=[sh[0]+16*Math.sin(rad), sh[1]-16*Math.cos(rad)];
+function illusLeg(A,cls,good){ // pierna de perfil (muslo+gemelo+zapatilla), rodilla en A
+  const col=segStroke(cls), hip=[94,30], knee=[94,120], Lc=70, rad=(A-90)*Math.PI/180;
+  const ank=[knee[0]+Lc*Math.cos(rad), knee[1]+Lc*Math.sin(rad)];
+  const gm=(good[0]+good[1])/2, ir=(gm-90)*Math.PI/180, iank=[knee[0]+Lc*Math.cos(ir),knee[1]+Lc*Math.sin(ir)];
+  const dir=ank[0]>=knee[0]?1:-1;
+  return `<svg viewBox="0 0 200 225" width="100%" style="max-width:185px">
+    <line x1="94" y1="14" x2="94" y2="214" stroke="var(--line-strong)" stroke-width="1.5" stroke-dasharray="3 6"/>
+    <path d="M${knee[0]} ${knee[1]} L${iank[0].toFixed(1)} ${iank[1].toFixed(1)}" fill="none" stroke="var(--ink-mute)" stroke-width="2.5" stroke-dasharray="3 5" opacity=".55"/>
+    ${limb(hip,knee,15,11,col)}
+    ${limb(knee,ank,11,6,col)}
+    ${shoeAt(ank[0],ank[1],dir)}
+    <circle cx="${knee[0]}" cy="${knee[1]}" r="4" fill="#0e1117" opacity=".3"/>
+    ${angBadge(knee[0]+15,knee[1]-6,A)}</svg>`;
+}
+function illusArm(A,cls,good){ const col=segStroke(cls), sh=[74,32], el=[74,112], Lf=58, rad=(A-90)*Math.PI/180;
+  const wr=[el[0]+Lf*Math.cos(rad), el[1]+Lf*Math.sin(rad)];
+  const gm=(good[0]+good[1])/2, ir=(gm-90)*Math.PI/180, iwr=[el[0]+Lf*Math.cos(ir),el[1]+Lf*Math.sin(ir)];
+  return `<svg viewBox="0 0 200 195" width="100%" style="max-width:175px">
+    <path d="M${el[0]} ${el[1]} L${iwr[0].toFixed(1)} ${iwr[1].toFixed(1)}" fill="none" stroke="var(--ink-mute)" stroke-width="2.5" stroke-dasharray="3 5" opacity=".55"/>
+    ${limb(sh,el,12,9,col)}
+    ${limb(el,wr,9,6,col)}
+    <circle cx="${wr[0].toFixed(1)}" cy="${wr[1].toFixed(1)}" r="10" fill="${col}"/>
+    <circle cx="${el[0]}" cy="${el[1]}" r="4" fill="#0e1117" opacity=".3"/>
+    ${angBadge(el[0]+13,el[1]-4,A)}</svg>`;
+}
+function illusTrunk(A,cls,good){ const col=segStroke(cls), hip=[100,196], Lt=112, rad=A*Math.PI/180;
+  const sh=[hip[0]+Lt*Math.sin(rad), hip[1]-Lt*Math.cos(rad)], head=[sh[0]+30*Math.sin(rad), sh[1]-30*Math.cos(rad)];
   const gm=(good[0]+good[1])/2, ir=gm*Math.PI/180, ish=[hip[0]+Lt*Math.sin(ir), hip[1]-Lt*Math.cos(ir)];
-  return `<svg viewBox="0 0 200 220" width="100%" style="max-width:180px">
-    <line x1="${hip[0]}" y1="18" x2="${hip[0]}" y2="206" stroke="var(--line-strong)" stroke-width="1.5" stroke-dasharray="3 6"/>
-    <path d="M${hip[0]} ${hip[1]} L${ish[0].toFixed(1)} ${ish[1].toFixed(1)}" stroke="var(--ink-mute)" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 8" opacity=".7"/>
-    <path d="M${hip[0]} ${hip[1]} L${sh[0].toFixed(1)} ${sh[1].toFixed(1)}" stroke="${col}" stroke-width="30" stroke-linecap="round"/>
-    <circle cx="${head[0].toFixed(1)}" cy="${head[1].toFixed(1)}" r="20" fill="${col}"/>
-    ${angBadge(hip[0]+14,hip[1]-64,A)}</svg>`;
+  return `<svg viewBox="0 0 200 225" width="100%" style="max-width:170px">
+    <line x1="${hip[0]}" y1="16" x2="${hip[0]}" y2="212" stroke="var(--line-strong)" stroke-width="1.5" stroke-dasharray="3 6"/>
+    <path d="M${hip[0]} ${hip[1]} L${ish[0].toFixed(1)} ${ish[1].toFixed(1)}" fill="none" stroke="var(--ink-mute)" stroke-width="2.5" stroke-dasharray="3 6" opacity=".55"/>
+    ${limb(hip,sh,13,17,col)}
+    <circle cx="${head[0].toFixed(1)}" cy="${head[1].toFixed(1)}" r="17" fill="${col}"/>
+    ${angBadge(hip[0]+12,hip[1]-58,A)}</svg>`;
 }
-function illusHead(A,cls,good){ const col=segStroke(cls), c=[104,96];
-  const rad=(A-90)*Math.PI/180, L=52, gaze=[c[0]+L*Math.cos(rad), c[1]+L*Math.sin(rad)];
-  // cabeza de perfil rellena (mirando a la derecha) + cuello
-  const head=`<path d="M84 74 Q86 54 108 52 Q132 52 136 74 Q138 88 132 96 L140 100 Q142 104 137 106 L131 107 Q129 120 116 124 L110 138 L92 138 Q86 120 86 112 Q80 100 84 74 Z" fill="${col}"/>`;
-  const neck=`<path d="M96 132 L114 132 L118 156 L92 156 Z" fill="${col}" opacity=".85"/>`;
-  return `<svg viewBox="0 0 200 190" width="100%" style="max-width:180px">
-    <line x1="40" y1="96" x2="176" y2="96" stroke="var(--line-strong)" stroke-width="1.5" stroke-dasharray="3 6"/>
-    ${neck}${head}
-    <line x1="${c[0]}" y1="${c[1]}" x2="${gaze[0].toFixed(1)}" y2="${gaze[1].toFixed(1)}" stroke="var(--accent)" stroke-width="4.5" stroke-linecap="round"/>
-    <circle cx="${gaze[0].toFixed(1)}" cy="${gaze[1].toFixed(1)}" r="6" fill="var(--accent)"/>
-    ${angBadge(140,60,A)}</svg>`;
+function illusHead(A,cls){ const col=segStroke(cls), neck=[100,150], rot=A;
+  // perfil de cabeza (mirando a la derecha), cuello; inclinación = A alrededor de la base del cuello
+  return `<svg viewBox="0 0 200 190" width="100%" style="max-width:170px">
+    <line x1="42" y1="150" x2="176" y2="150" stroke="var(--line-strong)" stroke-width="1.5" stroke-dasharray="3 6"/>
+    <g transform="rotate(${rot} ${neck[0]} ${neck[1]})">
+      <rect x="90" y="112" width="22" height="40" rx="4" fill="${col}"/>
+      <ellipse cx="99" cy="80" rx="33" ry="37" fill="${col}"/>
+      <path d="M129 70 L147 84 L129 94 Z" fill="${col}"/>
+      <circle cx="115" cy="76" r="4.5" fill="#0e1117" opacity=".55"/>
+      <path d="M124 96 Q118 100 112 98" fill="none" stroke="#0e1117" stroke-width="2.5" stroke-linecap="round" opacity=".4"/>
+    </g>
+    ${angBadge(140,52,A)}</svg>`;
 }
-function segIllus(seg,v,cls){ if(seg.illus==='knee')return illusLeg(v,cls,seg.good); if(seg.illus==='elbow')return illusArm(v,cls,seg.good); if(seg.illus==='trunk')return illusTrunk(v,cls,seg.good); if(seg.illus==='head')return illusHead(v,cls,seg.good); return ''; }
+function segIllus(seg,v,cls){ if(seg.illus==='knee')return illusLeg(v,cls,seg.good); if(seg.illus==='elbow')return illusArm(v,cls,seg.good); if(seg.illus==='trunk')return illusTrunk(v,cls,seg.good); if(seg.illus==='head')return illusHead(v,cls); return ''; }
+function illusOverstride(shankDeg,cls){ // pie adelantado respecto del centro de gravedad; ángulo de tibia vs vertical
+  const col=segStroke(cls), hip=[76,34], knee=[92,112], Lc=72, rad=shankDeg*Math.PI/180;
+  const ank=[knee[0]+Lc*Math.sin(rad), knee[1]+Lc*Math.cos(rad)];
+  const dir=ank[0]>=knee[0]?1:-1;
+  return `<svg viewBox="0 0 210 220" width="100%" style="max-width:200px">
+    <line x1="${knee[0]}" y1="20" x2="${knee[0]}" y2="212" stroke="var(--line-strong)" stroke-width="1.5" stroke-dasharray="3 6"/>
+    <text x="${knee[0]-4}" y="30" text-anchor="end" font-size="9" fill="var(--ink-mute)">centro de masa</text>
+    <path d="M${knee[0]} ${knee[1]} L${knee[0]} ${(knee[1]+Lc).toFixed(1)}" fill="none" stroke="var(--ink-mute)" stroke-width="2.5" stroke-dasharray="3 5" opacity=".5"/>
+    ${limb(hip,knee,15,11,col)}
+    ${limb(knee,ank,11,6,col)}
+    ${shoeAt(ank[0],ank[1],dir)}
+    <circle cx="${knee[0]}" cy="${knee[1]}" r="4" fill="#0e1117" opacity=".3"/>
+    ${angBadge(knee[0]+14,knee[1]+8,shankDeg)}</svg>`;
+}
 function ochyCard(title,cls,illusHtml,angleTxt,rangeTxt,boxes){
   const boxHtml=boxes.map(b=>`<div class="obox"><b>${b.h}</b>${b.p}</div>`).join('');
   return `<div class="ocard ${cls}"><div class="ocard-h">${title}</div><div class="ocard-b">
@@ -1595,6 +1627,8 @@ function curvesBlock(c){
   const add=(cov,title,sub,sL,sR)=>{ if(cov>=0.5){ const s=angleCurveSvg(title,sub,c.t,sL,sR); if(s){html+=s;any=true;} } };
   add(c.cov.knee,'Rodilla — flexión/extensión','Ángulo cadera–rodilla–tobillo a lo largo del clip. Compará el patrón y la simetría entre piernas.',c.kneeL,c.kneeR);
   add(c.cov.hip,'Cadera — flexión','Ángulo hombro–cadera–rodilla (flexión de cadera) por ciclo.',c.hipL,c.hipR);
+  add(c.cov.ankle,'Tobillo — dorsiflexión','Ángulo rodilla–tobillo–pie; cómo trabaja el tobillo en el ciclo.',c.ankL,c.ankR);
+  add(c.cov.shoulder,'Hombro — oscilación','Ángulo cadera–hombro–codo; amplitud del braceo desde el hombro.',c.shL,c.shR);
   add(c.cov.elbow,'Codo — flexión','Ángulo hombro–codo–muñeca; el brazo debería mantener un rango estable.',c.elbowL,c.elbowR);
   if(!any) return '';
   return '<div class="metric" style="border-left-color:var(--blue)"><div class="top"><span class="name">📈 Curvas de ángulo articular · provisional</span></div><p class="desc" style="margin-top:2px">Evolución de cada ángulo durante el video (izquierda vs derecha). Sirve para ver ritmo, amplitud y asimetrías. La pose 2D tiene error conocido en ángulos: leer patrones, no decimales.</p>'+html+'</div>';
@@ -1732,12 +1766,16 @@ function lateralCards(r){
   else {vM='—';vU='';vB='b-warn';vL='Sin dato';vR='No se pudo estimar la estatura en cuadro.';}
   html+=metricCard({name:'Oscilación vertical',val:vM,unit:vU,bandClass:vB,bandLabel:vL,
     desc:'Cuánto sube y baja el centro de masa en cada paso. Menor oscilación se asocia a mejor economía de carrera (Moore 2016; Folland 2017).',ref:vR});
-  if(r.overOffset!=null){
-    const ov=r.overOffset, ob=ov<=0.15?'b-good':ov<=0.30?'b-warn':'b-bad', ol=ov<=0.15?'Neutral':ov<=0.30?'Leve':'Marcado';
-    const sh=r.shankAngle!=null?` Ángulo de tibia al contacto ≈ ${Math.round(r.shankAngle)}° respecto de la vertical.`:'';
-    html+=metricCard({name:'Overstride (zancada adelantada)',val:(ov*100).toFixed(0),unit:'% del largo de pierna',
-      bandClass:ob,bandLabel:ol,desc:'Qué tan adelante del centro de masa aterriza el pie. Aterrizar muy adelante con la rodilla extendida aumenta el frenado y la carga articular.'+sh,
-      ref:'Umbrales provisionales: ≤15% · 15–30% · >30%. El ángulo de tibia al contacto se asocia a economía/performance (Folland 2017).'});
+  if(r.shankAngle!=null||r.overOffset!=null){
+    const sa=r.shankAngle!=null?r.shankAngle:(r.overOffset*40); // fallback aproximado
+    const st=(sa>=-10&&sa<=5)?'b-good':(sa>=-20&&sa<=15)?'b-warn':'b-bad', inR=st==='b-good';
+    const title=inR?'Aterrizaje bajo el centro de gravedad':'Aterrizaje del pie adelantado (overstride)';
+    const boxes=[
+      {h:'Impacto',p:inR?'El pie aterriza cerca del centro de masa: poco frenado y menor pico de impacto sobre la rodilla.':'Los efectos de frenado se amplifican y aumentan la presión sobre la rodilla y el riesgo de lesión.'},
+      {h:'Amortiguación',p:inR?'La cadena elástica (pantorrilla, tendón de Aquiles) absorbe bien la carga y devuelve energía.':'El cuerpo se esfuerza para controlar la flexión de rodilla y tobillo; la pantorrilla y otros músculos quedan bajo presión.'},
+      {h:'Propulsión',p:inR?'Buena transferencia de energía hacia adelante; la zancada se mantiene estable.':'El impulso se compromete, se pierde transferencia de energía y la carrera se vuelve menos estable.'}
+    ];
+    html+=ochyCard(title,st,illusOverstride(sa,st),Math.round(sa)+'°','-10° ; 5°',boxes);
   }
   if(r.step){
     const st=r.step, str=r.stride;
