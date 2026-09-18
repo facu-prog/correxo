@@ -213,6 +213,10 @@
   #pdfReport .pclin b{color:var(--blue)}
   #pdfReport .pdisc{font-size:10.5px;color:var(--ink-mute);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:14px;line-height:1.5}
   #pdfReport .psign{display:flex;justify-content:space-between;margin-top:26px;padding-top:12px;border-top:1px solid var(--line);font-size:11px;color:var(--ink-soft)}
+  /* evitar cortes de tarjetas/imágenes entre páginas del PDF */
+  #pdfReport .ocard,#pdfReport .metric,#pdfReport .part-fig,#pdfReport .vsum,#pdfReport .pclin,#pdfReport .pex,#pdfReport .vchip,#pdfReport figure,#pdfReport img,#pdfReport .ocard-viz,#pdfReport .obox{page-break-inside:avoid;break-inside:avoid}
+  #pdfReport h2{page-break-after:avoid;break-after:avoid}
+  #pdfReport .sec-h{page-break-after:avoid;break-after:avoid;page-break-before:auto}
   #pdfReport .pv{display:flex;gap:16px;align-items:center;background:#f7f9fc;border:1px solid #e6e9ef;border-radius:12px;padding:14px 16px;margin:6px 0 12px}
   #pdfReport .pv-lead h3{font-size:15px;margin:0 0 3px;color:#1a1f2b}
   #pdfReport .pv-lead p{font-size:11.5px;margin:0;color:#5b6472}
@@ -1590,6 +1594,10 @@ const JOINTS={
   'brazo.png':{pts:[[102,58],[80,150],[178,150]],vertex:1},    // hombro, codo, muñeca
   'torso.png':{pts:[[118,196],[120,58]]},                       // cadera→hombro (columna)
   'cabeza.png':{pts:[[92,112],[158,118]]},                      // eje de la cabeza
+  // vista trasera (plano frontal): línea coloreada por estado marca la tendencia
+  'pelvis.png':{pts:[[55,150],[170,150]]},                      // línea entre caderas (nivel pélvico)
+  'pierna-frente.png':{pts:[[120,28],[108,118],[95,182]]},      // cadera–rodilla–tobillo frontal (valgo/varo)
+  'pie.png':{pts:[[112,48],[112,150],[110,196]]},               // eje pierna–tobillo–pie (pronación)
 };
 function angleOverlay(src,cls){
   const j=JOINTS[src]; if(!j) return '';
@@ -1866,7 +1874,7 @@ function rearCards(r){
   // PELVIS
   html+='<h3 class="sec-h">Pelvis — alineación (izquierda vs derecha)</h3>';
   ['L','R'].forEach(sd=>{ const v=R.pelvis[sd]; if(v==null)return; const st=v<=2?'b-good':v<=4?'b-warn':'b-bad', ok=st==='b-good';
-    html+=ochyCard(sideName(sd)+': '+(ok?'Pelvis alineada':'Caída pélvica'),st, partImg('pelvis.png',v,{mirror:sd==='R'}), v.toFixed(1)+'°','0° ; 2°',[
+    html+=ochyCard(sideName(sd)+': '+(ok?'Pelvis alineada':'Caída pélvica'),st, partImg('pelvis.png',v,{mirror:sd==='R',cls:st}), v.toFixed(1)+'°','0° ; 2°',[
       {h:'Resumen',p:ok?'Los lados de la pelvis quedan a la misma altura en el apoyo: posición ideal.':'La pelvis cae hacia el lado que no apoya durante el apoyo de este lado.'},
       {h:'Consecuencias',p:ok?'Buena estabilidad de cadera y menor riesgo de sobrecarga.':'Se asocia de forma prospectiva a mayor riesgo de lesión; suele indicar debilidad de abductores de cadera (glúteo medio).'},
       {h:'Corrección',p:ok?'Mantené esta estabilidad; seguí con trabajo de core y glúteos.':'Fortalecé glúteo medio y core: abducciones de cadera, planchas laterales, monster walks.'}]);
@@ -1875,7 +1883,7 @@ function rearCards(r){
   html+='<h3 class="sec-h">Rodilla — alineación frontal (izquierda vs derecha)</h3>';
   ['L','R'].forEach(sd=>{ const v=R.knee[sd]; if(v==null)return; const a=Math.abs(v), st=a<=3?'b-good':a<=6?'b-warn':'b-bad', ok=st==='b-good';
     const dir=v>=0?'hacia adentro (valgo)':'hacia afuera (varo)';
-    html+=ochyCard(sideName(sd)+': '+(ok?'Rodilla alineada':(v>=0?'Aducción (valgo)':'Desviación en varo')),st, partImg('pierna-frente.png',v,{mirror:sd==='R'}), v.toFixed(1)+'°','-3° ; 3°',[
+    html+=ochyCard(sideName(sd)+': '+(ok?'Rodilla alineada':(v>=0?'Aducción (valgo)':'Desviación en varo')),st, partImg('pierna-frente.png',v,{mirror:sd==='R',cls:st}), v.toFixed(1)+'°','-3° ; 3°',[
       {h:'Resumen',p:ok?'La rodilla se mantiene alineada entre cadera y tobillo en el apoyo.':'La rodilla se desvía '+dir+' respecto de la línea cadera–tobillo.'},
       {h:'Consecuencias',p:ok?'Buena distribución de cargas en la rodilla.':'Se vincula a dolor patelofemoral y sobrecarga de rodilla; bandera a mirar.'},
       {h:'Corrección',p:ok?'Mantené esta alineación.':'Imaginá una línea recta cadera–rodilla–tobillo; activá glúteos, isquios y cuádriceps para estabilizar la rodilla.'}]);
@@ -1884,7 +1892,7 @@ function rearCards(r){
   html+='<h3 class="sec-h">Pie — pronación (izquierda vs derecha) · experimental</h3>';
   ['L','R'].forEach(sd=>{ const v=R.foot[sd]; if(v==null)return; const a=Math.abs(v), st=a<=3?'b-good':a<=6?'b-warn':'b-bad', ok=st==='b-good';
     const dir=v>=0?'pronación (rueda hacia adentro)':'supinación (rueda hacia afuera)';
-    html+=ochyCard(sideName(sd)+': '+(ok?'Pie neutro':(v>=0?'Pronación':'Supinación')),st, partImg('pie.png',v,{mirror:sd==='R'}), v.toFixed(1)+'°','-3° ; 3°',[
+    html+=ochyCard(sideName(sd)+': '+(ok?'Pie neutro':(v>=0?'Pronación':'Supinación')),st, partImg('pie.png',v,{mirror:sd==='R',cls:st}), v.toFixed(1)+'°','-3° ; 3°',[
       {h:'Resumen',p:ok?'El pie apoya en posición neutra.':'El pie tiende a '+dir+' en el apoyo.'},
       {h:'Consecuencias',p:ok?'Posición ideal para un apoyo eficiente.':'Una pronación/supinación marcada puede asociarse a periostitis, fascitis plantar o tendinitis de Aquiles.'},
       {h:'Corrección',p:'Trabajá propiocepción y fuerza de pie y tobillo. Nota: la pronación por video 2D es orientativa, validá con un profesional.'}]);
@@ -2054,7 +2062,7 @@ function downloadPdf(runner,btn){
     html2canvas:{scale:2,backgroundColor:'#0e1117',useCORS:true,imageTimeout:15000,scrollX:0,scrollY:0,
       ignoreElements:(el)=>el.getAttribute&&el.getAttribute('data-pdf-ignore')==='1'},
     jsPDF:{orientation:'portrait',unit:'mm',format:'a4'},
-    pagebreak:{mode:['css','legacy']}};
+    pagebreak:{mode:['css','legacy'],avoid:['.ocard','.metric','.part-fig','.vsum','.pclin','.pex','.obox','img','figure']}};
   try{
     const p=html2pdf().set(opts).from(node).save();
     if(p&&p.then) p.then(restore).catch(err=>{console.error('PDF err',err);alert('Falló la generación del PDF. Reintentá.');restore();});
