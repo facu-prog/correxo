@@ -821,6 +821,7 @@
   <div class="tabs">
     <button class="tab active" data-tab="lat">📹 Vista lateral</button>
     <button class="tab" data-tab="rear">📹 Vista trasera</button>
+    <button class="tab" data-tab="foot">🦶 Retropié (foto)</button>
     <button class="tab" data-tab="sum">📋 Resumen &amp; plan</button>
     <button class="tab" data-tab="op">🔒 Operador</button>
   </div>
@@ -869,6 +870,38 @@
         <p class="hint">Las métricas de plano frontal se reportan en bandas, nunca con decimales.</p>
         <div class="empty" id="rear-empty"><div class="big">📊</div>Cargá un video trasero y tocá <b>Analizar</b>.</div>
         <div class="results" id="rear-results"><div class="quality" id="rear-quality"><div class="qhead"><span class="qlabel">Calidad de la captura</span><span class="qval" id="rear-qval">—</span></div><div class="qstats" id="rear-qstats"></div><div class="qwarn" id="rear-qwarn" style="display:none"></div></div><div id="rear-metrics"></div><div class="disclaimer"><span class="eyebrow">Screening, no diagnóstico</span>Tamizaje biomecánico y educación, no diagnóstico. Rangos provisionales a validar con un profesional. Ante dolor o lesión, consultá a un kinesiólogo o médico deportivo.</div></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ============ RETROPIÉ (foto estática) ============ -->
+  <div class="tabpane" id="pane-foot">
+    <div class="layout">
+      <section class="panel">
+        <h2>🦶 Alineación de retropié — foto estática</h2>
+        <p class="hint">Foto de los <b>dos talones de espaldas</b>, parado descalzo, cámara a la altura del tobillo, buena luz y pies a la misma distancia. Después marcá el eje de la pierna y el del talón en cada pie.</p>
+        <label class="drop" id="foot-drop">
+          <input type="file" id="foot-file" accept="image/*" hidden>
+          <div class="big">📷 Cargar foto de talones</div>
+          <div>o arrastrala acá</div>
+        </label>
+        <div id="foot-stage" style="display:none">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0">
+            <span style="font-size:.8rem;color:var(--ink-mute)">Lado a ajustar:</span>
+            <button class="tab active" id="foot-side-L" style="padding:6px 12px">Pie izquierdo</button>
+            <button class="tab" id="foot-side-R" style="padding:6px 12px">Pie derecho</button>
+            <button class="btn-retry" id="foot-reset">↺ Reiniciar puntos</button>
+            <button class="btn-retry" id="foot-clear">Cambiar foto</button>
+          </div>
+          <div style="position:relative;touch-action:none;line-height:0" id="foot-canvas-wrap">
+            <canvas id="foot-canvas" style="width:100%;display:block;border-radius:10px;background:#000;cursor:grab"></canvas>
+          </div>
+          <p class="hint" id="foot-guide">Arrastrá los puntos del lado seleccionado: <b style="color:var(--blue)">azul</b> = eje de la pierna (2 puntos, de arriba hacia el tobillo) · <b style="color:var(--accent)">naranja</b> = eje del talón (2 puntos, de arriba hacia abajo del talón).</p>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>Resultado</h2>
+        <div id="foot-results"><div class="empty"><div class="big">🦶</div>Cargá una foto y marcá los ejes para ver el ángulo del retropié por lado.</div></div>
       </section>
     </div>
   </div>
@@ -2255,12 +2288,70 @@ function initOperator(){
   try{ const saved=sessionStorage.getItem(OPKEY); if(saved) OP_PIN=saved; }catch(e){}
 }
 
+/* ---------- Retropié: goniometría sobre foto estática ---------- */
+function initFootTool(){
+  const cv=$('foot-canvas'); if(!cv) return;
+  const ctx=cv.getContext('2d');
+  const FT={img:null, side:'L', pts:null, drag:null, res:null};
+  const HITR=7;
+  function defaultPts(w,h){ const mk=(fx,ty)=>[fx*w,ty*h];
+    return { L:{leg:[mk(0.34,0.34),mk(0.34,0.60)], heel:[mk(0.34,0.64),mk(0.34,0.90)]},
+             R:{leg:[mk(0.66,0.34),mk(0.66,0.60)], heel:[mk(0.66,0.64),mk(0.66,0.90)]} }; }
+  function loadImg(file){ const img=new Image(); img.onload=()=>{
+      let w=img.naturalWidth,h=img.naturalHeight; const maxW=1000; if(w>maxW){ h=Math.round(h*maxW/w); w=maxW; }
+      cv.width=w; cv.height=h; FT.img=img; FT.pts=defaultPts(w,h);
+      $('foot-drop').style.display='none'; $('foot-stage').style.display='block'; draw(); compute();
+    }; img.src=URL.createObjectURL(file); }
+  function toCv(e){ const r=cv.getBoundingClientRect(); return [ (e.clientX-r.left)*(cv.width/r.width), (e.clientY-r.top)*(cv.height/r.height) ]; }
+  function handles(side){ const p=FT.pts[side]; return [{k:'leg',i:0,p:p.leg[0]},{k:'leg',i:1,p:p.leg[1]},{k:'heel',i:0,p:p.heel[0]},{k:'heel',i:1,p:p.heel[1]}]; }
+  function ln(pp,col,s,op){ ctx.save();ctx.globalAlpha=op;ctx.strokeStyle=col;ctx.lineWidth=s*1.5;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(pp[0][0],pp[0][1]);ctx.lineTo(pp[1][0],pp[1][1]);ctx.stroke();ctx.restore(); }
+  function dt(p,col,s,cur){ ctx.save();ctx.globalAlpha=cur?1:.5;ctx.fillStyle=col;ctx.strokeStyle='#fff';ctx.lineWidth=s*0.6;ctx.beginPath();ctx.arc(p[0],p[1],s*(cur?2.6:1.9),0,7);ctx.fill();ctx.stroke();ctx.restore(); }
+  function draw(){ if(!FT.img)return; ctx.clearRect(0,0,cv.width,cv.height); ctx.drawImage(FT.img,0,0,cv.width,cv.height);
+    const s=Math.max(2,cv.width/300);
+    ['L','R'].forEach(side=>{ const cur=side===FT.side, p=FT.pts[side], op=cur?1:.5;
+      ln(p.leg,'#6ea0dc',s,op); ln(p.heel,'#f3743e',s,op);
+      dt(p.leg[0],'#6ea0dc',s,cur);dt(p.leg[1],'#6ea0dc',s,cur);dt(p.heel[0],'#f3743e',s,cur);dt(p.heel[1],'#f3743e',s,cur); }); }
+  function compute(){ const res={};
+    ['L','R'].forEach(side=>{ const p=FT.pts[side];
+      const lv=[p.leg[1][0]-p.leg[0][0],p.leg[1][1]-p.leg[0][1]], hv=[p.heel[1][0]-p.heel[0][0],p.heel[1][1]-p.heel[0][1]];
+      const cross=lv[0]*hv[1]-lv[1]*hv[0], dot=lv[0]*hv[0]+lv[1]*hv[1];
+      const mag=Math.abs(Math.atan2(cross,dot)*180/Math.PI);
+      const centerX=cv.width/2, latSign=(p.leg[1][0]<centerX)?-1:1, dx=p.heel[1][0]-p.leg[1][0];
+      res[side]=((dx*latSign)>=0)?mag:-mag; });
+    FT.res=res; try{ V.foot=res; }catch(e){} renderFoot(res); }
+  function band(v){ return (v>=-4&&v<=8)?'b-good':((v>8&&v<=12)||(v>=-8&&v<-4))?'b-warn':'b-bad'; }
+  function renderFoot(res){
+    const card=(name,v)=>{ const b=band(v), col=b==='b-good'?'Neutro':(v>8?'Pronación (valgo)':v<-4?'Supinación (varo)':'Leve');
+      const dir=v>0?'el talón se evierte hacia adentro (tendencia a pronación)':v<0?'el talón se invierte hacia afuera (tendencia a supinación)':'alineado';
+      return `<div class="metric ${b}"><div class="top"><span class="name">${name}</span></div>
+        <div class="readout"><span class="val">${v.toFixed(1)}°</span><span class="band ${b}">${col}</span></div>
+        <div class="desc">Ángulo del retropié respecto del eje de la pierna: ${dir}.</div>
+        <div class="ref">Guía provisional: −4°…8° neutro. Goniometría sobre foto — estandarizá la captura (talones de espaldas, cámara perpendicular). A validar con el profesional.</div></div>`; };
+    $('foot-results').innerHTML=card('Pie izquierdo',res.L)+card('Pie derecho',res.R); }
+  $('foot-file').addEventListener('change',e=>{ const f=e.target.files[0]; if(f) loadImg(f); });
+  const drop=$('foot-drop');
+  ['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
+  ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
+  drop.addEventListener('drop',e=>{ const f=e.dataTransfer.files&&e.dataTransfer.files[0]; if(f) loadImg(f); });
+  $('foot-side-L').addEventListener('click',()=>{ FT.side='L'; $('foot-side-L').classList.add('active'); $('foot-side-R').classList.remove('active'); draw(); });
+  $('foot-side-R').addEventListener('click',()=>{ FT.side='R'; $('foot-side-R').classList.add('active'); $('foot-side-L').classList.remove('active'); draw(); });
+  $('foot-reset').addEventListener('click',()=>{ if(FT.img){ FT.pts=defaultPts(cv.width,cv.height); draw(); compute(); } });
+  $('foot-clear').addEventListener('click',()=>{ FT.img=null; $('foot-stage').style.display='none'; $('foot-drop').style.display=''; $('foot-file').value=''; });
+  function down(e){ if(!FT.img)return; const [x,y]=toCv(e), s=Math.max(2,cv.width/300); let best=null,bd=1e9;
+    handles(FT.side).forEach(h=>{ const d=Math.hypot(h.p[0]-x,h.p[1]-y); if(d<bd){bd=d;best=h;} });
+    if(best && bd<s*HITR){ FT.drag=best; cv.style.cursor='grabbing'; e.preventDefault(); } }
+  function move(e){ if(!FT.drag)return; const [x,y]=toCv(e); FT.pts[FT.side][FT.drag.k][FT.drag.i]=[Math.max(0,Math.min(cv.width,x)),Math.max(0,Math.min(cv.height,y))]; draw(); }
+  function up(){ if(FT.drag){ FT.drag=null; cv.style.cursor='grab'; compute(); } }
+  cv.addEventListener('pointerdown',down); window.addEventListener('pointermove',move); window.addEventListener('pointerup',up);
+}
+
 /* ---------- init ---------- */
 $('year').textContent=new Date().getFullYear();
 loadState();
 handleReturn();
 updateUnlockUI();
 initOperator();
+initFootTool();
 fetch('/api/health').then(r=>r.json()).then(j=>{ if(j&&j.version&&$('appver')) $('appver').textContent='v'+j.version; }).catch(()=>{});
 
 /* ---------- Gate de acceso + pantalla de análisis separada ---------- */
