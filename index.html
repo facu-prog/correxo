@@ -1525,18 +1525,36 @@ function wedge(cx,cy,p1,p2,r,col){
 }
 function bDot(x,y,col){return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5.5" fill="${col}" stroke="#fff" stroke-width="2"/>`;}
 function bSeg(a,b,col){return `<line x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}" stroke="${col}" stroke-width="4" stroke-linecap="round"/>`;}
-// ilustración = imagen real (silueta) sobre panel gris + badge de ángulo; mirror para izq/der
-function partImg(src,A,opt){opt=opt||{};
-  const mir=opt.mirror?'transform:scaleX(-1);':'';
-  const badge=(A==null)?'':`<span class="part-badge">${Math.round(A)}°</span>`;
-  return `<div class="part-fig"><img src="assets/parts/${src}" alt="" loading="lazy" style="${mir}">${badge}</div>`;
+// posiciones de articulaciones por imagen (espacio 225x225) para la línea de ángulo
+const JOINTS={
+  'pierna.png':{pts:[[92,40],[120,118],[150,180]],vertex:1},   // cadera, rodilla, tobillo
+  'brazo.png':{pts:[[102,58],[80,150],[178,150]],vertex:1},    // hombro, codo, muñeca
+  'torso.png':{pts:[[118,196],[120,58]]},                       // cadera→hombro (columna)
+  'cabeza.png':{pts:[[92,112],[158,118]]},                      // eje de la cabeza
+};
+function angleOverlay(src,cls){
+  const j=JOINTS[src]; if(!j) return '';
+  const col=segStroke(cls);
+  const poly=`<polyline points="${j.pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${col}" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const dots=j.pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="5.5" fill="${col}" stroke="#fff" stroke-width="2"/>`).join('');
+  let w=''; if(j.vertex!=null){const v=j.pts[j.vertex],a=j.pts[j.vertex-1],b=j.pts[j.vertex+1]; w=wedge(v[0],v[1],a,b,30,col);}
+  return `<svg viewBox="0 0 225 225" preserveAspectRatio="xMidYMid meet" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none">${w}${poly}${dots}</svg>`;
 }
-function illusLeg(A,cls,good){ return partImg('pierna.png',A); }
-function illusArm(A,cls){ return partImg('brazo.png',A); }
-function illusTrunk(A,cls){ return partImg('torso.png',A); }
-function illusHead(A,cls){ return partImg('cabeza.png',A); }
-function segIllus(seg,v,cls){ if(seg.illus==='knee')return illusLeg(v,cls,seg.good); if(seg.illus==='elbow')return illusArm(v,cls); if(seg.illus==='trunk')return illusTrunk(v,cls); if(seg.illus==='head')return illusHead(v,cls); return ''; }
-function illusOverstride(shankDeg,cls){ return partImg('pierna.png',shankDeg); }
+// ilustración = imagen real (silueta) + línea de ángulo coloreada por estado + badge; mirror para izq/der
+function partImg(src,A,opt){opt=opt||{};
+  const overlay=opt.cls?angleOverlay(src,opt.cls):'';
+  const inner=`<img src="assets/parts/${src}" alt="" style="width:100%;display:block">${overlay}`;
+  const tf=[opt.mirror?'scaleX(-1)':'',opt.rotate?`rotate(${opt.rotate}deg)`:''].filter(Boolean).join(' ');
+  const wrap=tf?`<div style="transform:${tf};transform-origin:center">${inner}</div>`:inner;
+  const badge=(A==null)?'':`<span class="part-badge">${Math.round(A)}°</span>`;
+  return `<div class="part-fig">${wrap}${badge}</div>`;
+}
+function illusLeg(A,cls,opt){ return partImg('pierna.png',A,Object.assign({cls},opt)); }
+function illusArm(A,cls){ return partImg('brazo.png',A,{cls}); }
+function illusTrunk(A,cls){ return partImg('torso.png',A,{cls}); }
+function illusHead(A,cls){ return partImg('cabeza.png',A,{cls}); }
+function segIllus(seg,v,cls){ if(seg.illus==='knee')return illusLeg(v,cls, seg.key==='backKnee'?{rotate:90}:null); if(seg.illus==='elbow')return illusArm(v,cls); if(seg.illus==='trunk')return illusTrunk(v,cls); if(seg.illus==='head')return illusHead(v,cls); return ''; }
+function illusOverstride(shankDeg,cls){ return partImg('pierna.png',shankDeg,{cls}); }
 function ochyCard(title,cls,illusHtml,angleTxt,rangeTxt,boxes){
   const boxHtml=boxes.map(b=>`<div class="obox"><b>${b.h}</b>${b.p}</div>`).join('');
   return `<div class="ocard ${cls}"><div class="ocard-h">${title}</div><div class="ocard-b">
