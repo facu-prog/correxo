@@ -682,7 +682,7 @@
           </div>
         </div>
       </div>
-      <div class="device-cap"><div class="n">Paso 2 · toma 2 de 2</div><h4>Filmá de atrás</h4><p>La segunda toma, de espaldas. Habilita el plano frontal: caída pélvica y valgo de rodilla.</p></div>
+      <div class="device-cap"><div class="n">Paso 2 · toma 2 de 2</div><h4>Filmá de atrás</h4><p>La segunda toma, de espaldas (vista trasera). Habilita: caída pélvica y valgo de rodilla.</p></div>
     </div>
 
     <!-- 3 · MEDICIÓN -->
@@ -857,7 +857,7 @@
     <div class="layout">
       <section class="panel">
         <h2>📹 Video — vista trasera</h2>
-        <p class="hint">Corredor de espaldas, corriendo hacia/desde la cámara. Cámara fija a la altura de la cadera, perfil frontal completo, buena luz. Mide plano frontal: <b>caída pélvica</b> y <b>valgo dinámico de rodilla</b>.</p>
+        <p class="hint">Corredor <b>de espaldas</b> (vista trasera/posterior), corriendo hacia/desde la cámara. Cámara fija a la altura de la cadera, cuerpo completo en cuadro, buena luz. Mide en la vista trasera: <b>caída pélvica</b>, <b>valgo de rodilla</b> y <b>pronación</b>.</p>
         <div class="drop" id="rear-drop" tabindex="0" role="button" aria-label="Cargar video trasero"><div class="big">📤 Click o arrastrá el video trasero</div><div class="small">MP4 · WebM · MOV</div></div>
         <input type="file" id="rear-file" accept="video/*">
         <div class="videoerr" id="rear-verr"></div>
@@ -867,7 +867,7 @@
       </section>
       <section class="panel">
         <h2>📈 Resultados — trasera</h2>
-        <p class="hint">Las métricas de plano frontal se reportan en bandas, nunca con decimales.</p>
+        <p class="hint">Las métricas de la vista trasera se reportan en bandas, nunca con decimales.</p>
         <div class="empty" id="rear-empty"><div class="big">📊</div>Cargá un video trasero y tocá <b>Analizar</b>.</div>
         <div class="results" id="rear-results"><div class="quality" id="rear-quality"><div class="qhead"><span class="qlabel">Calidad de la captura</span><span class="qval" id="rear-qval">—</span></div><div class="qstats" id="rear-qstats"></div><div class="qwarn" id="rear-qwarn" style="display:none"></div></div><div id="rear-metrics"></div><div class="disclaimer"><span class="eyebrow">Screening, no diagnóstico</span>Tamizaje biomecánico y educación, no diagnóstico. Rangos provisionales a validar con un profesional. Ante dolor o lesión, consultá a un kinesiólogo o médico deportivo.</div></div>
       </section>
@@ -1913,7 +1913,7 @@ function rearCards(r){
       {h:'Corrección',p:ok?'Mantené esta estabilidad; seguí con trabajo de core y glúteos.':'Fortalecé glúteo medio y core: abducciones de cadera, planchas laterales, monster walks.'}]);
   });
   // RODILLA (aducción/valgo)
-  html+='<h3 class="sec-h">Rodilla — alineación frontal (izquierda vs derecha)</h3>';
+  html+='<h3 class="sec-h">Rodilla — alineación en vista trasera (izquierda vs derecha)</h3>';
   ['L','R'].forEach(sd=>{ const v=R.knee[sd]; if(v==null)return; const a=Math.abs(v), st=a<=3?'b-good':a<=6?'b-warn':'b-bad', ok=st==='b-good';
     const dir=v>=0?'hacia adentro (valgo)':'hacia afuera (varo)';
     html+=ochyCard(sideName(sd)+': '+(ok?'Rodilla alineada':(v>=0?'Aducción (valgo)':'Desviación en varo')),st, partImg('pierna-frente.png',v,{mirror:sd==='R',cls:st}), v.toFixed(1)+'°','-3° ; 3°',[
@@ -1930,7 +1930,7 @@ function rearCards(r){
       {h:'Consecuencias',p:ok?'Posición ideal para un apoyo eficiente.':'Una pronación/supinación marcada puede asociarse a periostitis, fascitis plantar o tendinitis de Aquiles.'},
       {h:'Corrección',p:'Trabajá propiocepción y fuerza de pie y tobillo. Nota: la pronación por video 2D es orientativa, validá con un profesional.'}]);
   });
-  html+='<div class="obox" style="margin-top:6px;font-size:.78rem"><b>Nota sobre precisión</b>Las métricas de plano frontal (pelvis, rodilla, pie) tienen menor precisión con pose 2D (límite conocido, ICC de tobillo bajo). Provisionales, a validar con el profesional.</div>';
+  html+='<div class="obox" style="margin-top:6px;font-size:.78rem"><b>Nota sobre precisión</b>Las métricas de la vista trasera/posterior (pelvis, rodilla, pie) tienen menor precisión con pose 2D (límite conocido, ICC de tobillo bajo). Provisionales, a validar con el profesional.</div>';
   return html;
 }
 
