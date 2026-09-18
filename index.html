@@ -203,16 +203,16 @@
   details p{font-size:.8rem;margin-top:8px;color:var(--ink-soft)}
 
   /* PDF (oculto en pantalla) */
-  #pdfReport{position:fixed;left:-9999px;top:0;width:794px;background:#fff;color:#1a1f2b;padding:44px;font-family:var(--sans)}
-  #pdfReport h1{font-size:22px;color:#c0451c;margin-bottom:4px}
-  #pdfReport h2{font-size:15px;color:#2f5f9e;border-bottom:2px solid #e6e9ef;padding-bottom:5px;margin:22px 0 12px}
-  #pdfReport .pmeta{font-size:12px;color:#5b6472}
-  #pdfReport table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px}
-  #pdfReport th,#pdfReport td{text-align:left;padding:7px 9px;border-bottom:1px solid #e6e9ef}
-  #pdfReport th{background:#f4f6fa;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#5b6472}
-  #pdfReport .pb-good{color:#1f7a54;font-weight:700} #pdfReport .pb-warn{color:#9a6a12;font-weight:700} #pdfReport .pb-bad{color:#a6413d;font-weight:700}
-  #pdfReport .pex{border-left:3px solid #c0451c;padding:6px 10px;margin-bottom:7px;font-size:12px;background:#faf7f5}
-  #pdfReport .pdisc{font-size:10.5px;color:#5b6472;background:#f4f6fa;border-radius:6px;padding:10px 12px;margin-top:14px;line-height:1.5}
+  #pdfReport{position:fixed;left:-9999px;top:0;width:820px;background:var(--bg);color:var(--ink);padding:34px 30px;font-family:var(--sans)}
+  #pdfReport h1{font-size:22px;color:var(--accent);margin-bottom:4px}
+  #pdfReport h2{font-size:15px;color:var(--blue);border-bottom:1px solid var(--line);padding-bottom:6px;margin:20px 0 12px}
+  #pdfReport .pmeta{font-size:12px;color:var(--ink-soft);margin-bottom:6px}
+  #pdfReport .pb-good{color:var(--good);font-weight:700} #pdfReport .pb-warn{color:var(--warn);font-weight:700} #pdfReport .pb-bad{color:var(--bad);font-weight:700}
+  #pdfReport .pex{border-left:3px solid var(--accent);padding:8px 12px;margin-bottom:8px;font-size:12px;background:var(--surface-2);border-radius:8px}
+  #pdfReport .pclin{background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--blue);border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.6}
+  #pdfReport .pclin b{color:var(--blue)}
+  #pdfReport .pdisc{font-size:10.5px;color:var(--ink-mute);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:14px;line-height:1.5}
+  #pdfReport .psign{display:flex;justify-content:space-between;margin-top:26px;padding-top:12px;border-top:1px solid var(--line);font-size:11px;color:var(--ink-soft)}
   #pdfReport .pv{display:flex;gap:16px;align-items:center;background:#f7f9fc;border:1px solid #e6e9ef;border-radius:12px;padding:14px 16px;margin:6px 0 12px}
   #pdfReport .pv-lead h3{font-size:15px;margin:0 0 3px;color:#1a1f2b}
   #pdfReport .pv-lead p{font-size:11.5px;margin:0;color:#5b6472}
@@ -2012,20 +2012,25 @@ function buildPdf(opts){
   const concLabel={si:'Sí',parcial:'Parcial',no:'No'}[opts.concordance]||opts.concordance;
   const clinical=(opts.notes||opts.concordance||opts.adjust)?`
     <h2>Revisión médica</h2>
-    ${opts.notes?'<p style="font-size:12px"><b>Notas clínicas:</b> '+escapeHtml(opts.notes)+'</p>':''}
-    ${opts.concordance?'<p style="font-size:12px"><b>Concordancia con la evaluación clínica del profesional:</b> '+concLabel+'</p>':''}
-    ${opts.adjust?'<p style="font-size:12px"><b>Ajustes sugeridos por el profesional:</b> '+escapeHtml(opts.adjust)+'</p>':''}`:'';
+    <div class="pclin">
+      ${opts.notes?'<div><b>Notas clínicas:</b> '+escapeHtml(opts.notes)+'</div>':''}
+      ${opts.concordance?'<div style="margin-top:6px"><b>Concordancia con la evaluación clínica del profesional:</b> '+concLabel+'</div>':''}
+      ${opts.adjust?'<div style="margin-top:6px"><b>Ajustes sugeridos por el profesional:</b> '+escapeHtml(opts.adjust)+'</div>':''}
+    </div>`:'';
+  const latHtml=(L&&L.enough)?lateralCards(L):'<p style="font-size:12px;color:var(--ink-mute)">Sin datos suficientes de la vista lateral (perfil).</p>';
+  const rearHtml=(R&&R.enough)?rearCards(R):'<p style="font-size:12px;color:var(--ink-mute)">Sin datos suficientes de la vista trasera (espaldas).</p>';
   $('pdfReport').innerHTML=`
     <h1>CORREXO · Reporte de screening biomecánico</h1>
     <div class="pmeta">Corredor: <b>${runner}</b> · Fecha: ${date}${pro?' · Profesional: <b>'+pro+'</b>':''}</div>
-    ${(L&&L.enough)?'<h2>Resumen visual</h2>'+pdfVisual(L):''}
     <h2>Índice de screening: ${idx}/100${(L&&L.enough&&computeScore(L)!=null)?' · Puntuación de análisis: '+computeScore(L)+'%':''}</h2>
     ${findings}
-    <h2>Métricas medidas</h2>
-    <table><thead><tr><th>Métrica</th><th>Valor</th><th>Banda</th></tr></thead><tbody>${rows||'<tr><td colspan="3">Sin datos suficientes</td></tr>'}</tbody></table>
+    ${clinical}
+    <h2>Vista lateral (perfil) — análisis completo</h2>
+    ${latHtml}
+    <h2>Vista trasera (espaldas) — análisis completo</h2>
+    ${rearHtml}
     <h2>Plan de coaching por evidencia</h2>
     ${plan}
-    ${clinical}
     <div class="pdisc"><b>Aviso:</b> este reporte es un tamizaje biomecánico automatizado con fines educativos y de coaching, no un diagnóstico médico. Las mediciones provienen de estimación de pose 2D con márgenes de error conocidos y umbrales provisionales. No sustituye la evaluación de un profesional de la salud. Ante dolor, lesión o duda clínica, consultá a un kinesiólogo o médico deportivo.</div>
     <div class="psign"><div>Firma del profesional${pro?': '+pro:''}</div><div>Fecha: ${date}</div></div>`;
   return runner;
@@ -2046,7 +2051,7 @@ function downloadPdf(runner,btn){
   const opts={margin:8,
     filename:`correxo-reporte-${(runner||'corredor').toLowerCase().replace(/\s+/g,'-')}-${new Date().toISOString().split('T')[0]}.pdf`,
     image:{type:'jpeg',quality:.95},
-    html2canvas:{scale:2,backgroundColor:'#ffffff',useCORS:true,imageTimeout:15000,scrollX:0,scrollY:0,
+    html2canvas:{scale:2,backgroundColor:'#0e1117',useCORS:true,imageTimeout:15000,scrollX:0,scrollY:0,
       ignoreElements:(el)=>el.getAttribute&&el.getAttribute('data-pdf-ignore')==='1'},
     jsPDF:{orientation:'portrait',unit:'mm',format:'a4'},
     pagebreak:{mode:['css','legacy']}};
