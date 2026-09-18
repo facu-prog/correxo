@@ -1944,11 +1944,12 @@ function downloadPdf(runner,btn){
   const ov=document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:2147483647;display:flex;align-items:center;justify-content:center;color:var(--ink);font-family:var(--mono);font-size:.9rem';
   ov.textContent='Generando reporte PDF…'; document.body.appendChild(ov);
-  const saved={left:node.style.left,top:node.style.top,zIndex:node.style.zIndex};
-  node.style.left='0'; node.style.top='0'; node.style.zIndex='2147483646';
-  const restore=()=>{ node.style.left=saved.left||'-9999px'; node.style.top=saved.top||'0'; node.style.zIndex=saved.zIndex||''; try{ov.remove();}catch(e){} if(btn){ btn.disabled=false; btn.textContent=prev; } };
+  // html2canvas mide un elemento position:fixed como altura 0 → PDF en blanco. Forzamos position:static durante la captura.
+  const saved=node.style.cssText;
+  node.style.position='static'; node.style.left='0'; node.style.top='0'; node.style.margin='0 auto'; node.style.zIndex='2147483646';
+  const restore=()=>{ node.style.cssText=saved; try{ov.remove();}catch(e){} if(btn){ btn.disabled=false; btn.textContent=prev; } };
   try{
-    const p=html2pdf().set({margin:8,filename:`correxo-reporte-${(runner||'corredor').toLowerCase().replace(/\s+/g,'-')}-${new Date().toISOString().split('T')[0]}.pdf`,image:{type:'jpeg',quality:.97},html2canvas:{scale:2,backgroundColor:'#ffffff',windowWidth:900,scrollX:0,scrollY:0,useCORS:true},jsPDF:{orientation:'portrait',unit:'mm',format:'a4'}}).from(node).save();
+    const p=html2pdf().set({margin:8,filename:`correxo-reporte-${(runner||'corredor').toLowerCase().replace(/\s+/g,'-')}-${new Date().toISOString().split('T')[0]}.pdf`,image:{type:'jpeg',quality:.97},html2canvas:{scale:2,backgroundColor:'#ffffff',useCORS:true},jsPDF:{orientation:'portrait',unit:'mm',format:'a4'}}).from(node).save();
     if(p&&p.then) p.then(restore).catch(err=>{console.error('PDF err',err);alert('Falló la generación del PDF.');restore();});
     else setTimeout(restore,3000);
   }catch(err){ console.error('PDF err',err); alert('Falló la generación del PDF.'); restore(); }
