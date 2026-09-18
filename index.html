@@ -1209,15 +1209,24 @@ function computeLateral(S){
   const fwd=fwdVotes?(Math.sign(fwdSum)||1):1;
   const legLens=[]; S.forEach(s=>['left','right'].forEach(side=>{const h=s.kp[side+'_hip'],a=s.kp[side+'_ankle'];if(h&&a&&h.score>.3&&a.score>.3)legLens.push(Math.hypot(a.x-h.x,a.y-h.y));}));
   const legLen=legLens.length?median(legLens):null;
-  const offsets=[],shanks=[];
+  const offsets=[],shanks=[],stepPx=[];
   b.peaks.forEach(pi=>{
     const tp=b.t[pi]; let best=null,bd=1e9; S.forEach(s=>{const d=Math.abs(s.t-tp);if(d<bd){bd=d;best=s;}}); if(!best)return;
     let footSide=null,fy=-1; ['left','right'].forEach(side=>{const a=best.kp[side+'_ankle'];if(a&&a.score>.3&&a.y>fy){fy=a.y;footSide=side;}}); if(!footSide)return;
     const ank=best.kp[footSide+'_ankle'],kn=best.kp[footSide+'_knee'],lh=best.kp['left_hip'],rh=best.kp['right_hip'];
     if(ank&&lh&&rh&&legLen){ const hcx=(lh.x+rh.x)/2; offsets.push((ank.x-hcx)*fwd/legLen); if(kn&&kn.score>.3) shanks.push(Math.atan2((ank.x-kn.x)*fwd,(ank.y-kn.y))*180/Math.PI); }
+    // largo de paso: separación fore-aft de ambos tobillos en el apoyo (medible en cinta y overground)
+    const aL=best.kp['left_ankle'],aR=best.kp['right_ankle'];
+    if(aL&&aR&&aL.score>.3&&aR.score>.3){ const d=Math.abs(aL.x-aR.x); if(d>2) stepPx.push(d); }
   });
+  // escala cm/px por estatura (si hay altura) y normalización a estatura
+  const cmPerPx=(heightCm>0&&b.statureMedian)?heightCm/b.statureMedian:null;
+  const stepPxMed=stepPx.length>=3?median(stepPx):null;
+  const step=stepPxMed!=null?{px:stepPxMed, cm:cmPerPx?stepPxMed*cmPerPx:null, pct:b.statureMedian?stepPxMed/b.statureMedian*100:null, n:stepPx.length}:null;
+  const stride=stepPxMed!=null?{cm:cmPerPx?2*stepPxMed*cmPerPx:null, pct:b.statureMedian?2*stepPxMed/b.statureMedian*100:null}:null;
   return Object.assign(b,{view:'lat',voPx,voCm,voPct,heightGiven:(heightCm>0),
     overOffset:offsets.length?median(offsets.filter(o=>o>-0.5)):null, shankAngle:shanks.length?median(shanks):null, overN:offsets.length, legLen,
+    step, stride, cmPerPx,
     gait:computeGait(b), angles:computeAngles(b)});
 }
 
@@ -1427,6 +1436,14 @@ function lateralCards(r){
       bandClass:ob,bandLabel:ol,desc:'Qué tan adelante del centro de masa aterriza el pie. Aterrizar muy adelante con la rodilla extendida aumenta el frenado y la carga articular.'+sh,
       ref:'Umbrales provisionales: ≤15% · 15–30% · >30%. El ángulo de tibia al contacto se asocia a economía/performance (Folland 2017).'});
   }
+  if(r.step){
+    const st=r.step, str=r.stride;
+    let val,unit,ref;
+    if(st.cm!=null){ val=Math.round(st.cm); unit='cm por paso'; ref=`Zancada (2 pasos) ≈ ${Math.round(str.cm)} cm. Con altura cargada. Provisional.`; }
+    else { val=st.pct!=null?st.pct.toFixed(0):'—'; unit='% de la estatura por paso'; ref=`Zancada ≈ ${str.pct!=null?str.pct.toFixed(0):'—'}% de la estatura. Cargá la altura para verlo en cm. Provisional.`; }
+    html+=metricCard({name:'Largo de paso / zancada',val,unit,bandClass:'b-good',bandLabel:'Medido',
+      desc:'Distancia fore-aft entre ambos pies en el apoyo (largo de paso); la zancada es el ciclo completo. El largo preferido suele ser casi óptimo; desviarse >6% empeora la economía (Moore 2016; Cavanagh & Kram 1989; Van Oeveren 2021).',
+      ref}); }
   const g=r.gait;
   if(g&&g.gaitOk){
     html+='<div class="metric" style="border-left-color:var(--blue)"><div class="top"><span class="name">🦶 Marcha (gait) · provisional</span></div><p class="desc" style="margin-top:2px">Eventos de pisada por mínimo vertical del talón (Fellin 2010; Milner 2015). Umbrales a calibrar con el piloto.</p></div>';
@@ -1565,6 +1582,8 @@ function buildPdf(opts){
     if(L.voCm!=null) rows+=metricRow('Oscilación vertical',L.voCm.toFixed(1),'cm (est.)',band(L.voCm,9,13),L.voCm<=9?'Eficiente':L.voCm<=13?'Media':'Alta');
     else if(L.voPct!=null) rows+=metricRow('Oscilación vertical',L.voPct.toFixed(1),'% estatura',band(L.voPct,5.5,8),L.voPct<=5.5?'Eficiente':L.voPct<=8?'Media':'Alta');
     if(L.overOffset!=null) rows+=metricRow('Overstride',(L.overOffset*100).toFixed(0),'% pierna',L.overOffset<=0.15?'b-good':L.overOffset<=0.30?'b-warn':'b-bad',L.overOffset<=0.15?'Neutral':L.overOffset<=0.30?'Leve':'Marcado');
+    if(L.step){ if(L.step.cm!=null){ rows+=metricRow('Largo de paso',Math.round(L.step.cm),'cm','b-good','Medido'); if(L.stride&&L.stride.cm!=null) rows+=metricRow('Largo de zancada',Math.round(L.stride.cm),'cm','b-good','Medido'); }
+      else if(L.step.pct!=null){ rows+=metricRow('Largo de paso',L.step.pct.toFixed(0),'% estatura','b-good','Medido'); } }
     if(L.gait&&L.gait.gaitOk){const g=L.gait;
       rows+=metricRow('Tiempo de contacto (GCT)',Math.round(g.gct*1000),'ms','b-good','Medido');
       if(g.flight!=null) rows+=metricRow('Tiempo de vuelo',Math.round(g.flight*1000),'ms','b-good','Medido');
