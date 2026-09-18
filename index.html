@@ -136,6 +136,43 @@
   .scorecard .big{font-family:var(--mono);font-size:3rem;font-weight:750;letter-spacing:-.03em}
   .scorecard .lab{font-family:var(--mono);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-mute);margin-top:2px}
   .scorecard .sub{color:var(--ink-soft);font-size:.86rem;margin-top:8px}
+  /* ---- Resumen visual para el paciente ---- */
+  .vsum{background:linear-gradient(135deg,var(--surface-2),var(--surface));border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:18px}
+  .vsum-hd{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+  .vsum-gauge{flex:none}
+  .vsum-lead{flex:1;min-width:180px}
+  .vsum-lead h3{font-family:var(--display);font-size:1.25rem;margin:0 0 4px;line-height:1.15}
+  .vsum-lead p{color:var(--ink-soft);font-size:.9rem;margin:0}
+  .vchips{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:16px}
+  .vchip{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:11px 12px;display:flex;flex-direction:column;gap:2px;position:relative;overflow:hidden}
+  .vchip::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px}
+  .vchip.b-good::before{background:var(--good)} .vchip.b-warn::before{background:var(--warn)} .vchip.b-bad::before{background:var(--bad)} .vchip.b-info::before{background:var(--blue)}
+  .vchip .vc-top{display:flex;align-items:center;gap:7px}
+  .vchip .vc-ic{font-size:1rem;line-height:1}
+  .vchip .vc-name{font-size:.78rem;color:var(--ink-mute);font-weight:600}
+  .vchip .vc-val{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:1.35rem;font-weight:700;letter-spacing:-.02em;margin-top:1px}
+  .vchip .vc-verd{font-size:.74rem;font-weight:700}
+  .vchip.b-good .vc-verd{color:var(--good)} .vchip.b-warn .vc-verd{color:var(--warn)} .vchip.b-bad .vc-verd{color:var(--bad)} .vchip.b-info .vc-verd{color:var(--blue)}
+  .vbody{display:flex;gap:14px;align-items:center;margin-top:16px;padding-top:16px;border-top:1px solid var(--line);flex-wrap:wrap}
+  .vbody svg{flex:none;width:130px;height:auto}
+  .vbody-leg{flex:1;min-width:170px;display:flex;flex-direction:column;gap:6px}
+  .vbody-leg .bl-row{display:flex;align-items:center;gap:8px;font-size:.82rem;color:var(--ink-soft)}
+  .vbody-leg .bl-dot{width:11px;height:11px;border-radius:50%;flex:none}
+  /* ---- Tarjetas por segmento estilo Ochy ---- */
+  .sec-h{font-family:var(--display);font-size:1.18rem;margin:24px 0 12px}
+  .ocard{background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--line-strong);border-radius:14px;margin-bottom:14px;overflow:hidden}
+  .ocard.b-good{border-left-color:var(--good)} .ocard.b-warn{border-left-color:var(--warn)} .ocard.b-bad{border-left-color:var(--bad)}
+  .ocard-h{text-align:center;font-weight:700;font-size:1rem;padding:12px 14px;background:var(--surface);border-bottom:1px solid var(--line)}
+  .ocard.b-good .ocard-h{color:var(--good)} .ocard.b-warn .ocard-h{color:var(--warn)} .ocard.b-bad .ocard-h{color:var(--bad)}
+  .ocard-b{display:grid;grid-template-columns:.9fr 1.1fr;gap:12px;padding:14px}
+  .ocard-viz{display:flex;flex-direction:column;gap:8px}
+  .ocard-viz .fig{background:var(--surface);border:1px solid var(--line);border-radius:10px;min-height:170px;display:grid;place-items:center;padding:10px}
+  .ocard-meta{font-size:.82rem;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;color:var(--ink-soft)}
+  .ocard-meta b{color:var(--accent)}
+  .ocard-boxes{display:flex;flex-direction:column;gap:8px}
+  .obox{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:.84rem;color:var(--ink-soft);line-height:1.5}
+  .obox b{color:var(--accent);display:block;margin-bottom:2px;font-size:.82rem}
+  @media(max-width:600px){.ocard-b{grid-template-columns:1fr}}
   .view-status{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
   .vs-row{display:flex;align-items:center;gap:10px;font-size:.9rem;color:var(--ink-mute);background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:10px 13px}
   .vs-row.ok{color:var(--ink)}
@@ -173,6 +210,18 @@
   #pdfReport .pb-good{color:#1f7a54;font-weight:700} #pdfReport .pb-warn{color:#9a6a12;font-weight:700} #pdfReport .pb-bad{color:#a6413d;font-weight:700}
   #pdfReport .pex{border-left:3px solid #c0451c;padding:6px 10px;margin-bottom:7px;font-size:12px;background:#faf7f5}
   #pdfReport .pdisc{font-size:10.5px;color:#5b6472;background:#f4f6fa;border-radius:6px;padding:10px 12px;margin-top:14px;line-height:1.5}
+  #pdfReport .pv{display:flex;gap:16px;align-items:center;background:#f7f9fc;border:1px solid #e6e9ef;border-radius:12px;padding:14px 16px;margin:6px 0 12px}
+  #pdfReport .pv-lead h3{font-size:15px;margin:0 0 3px;color:#1a1f2b}
+  #pdfReport .pv-lead p{font-size:11.5px;margin:0;color:#5b6472}
+  #pdfReport .pv-chips{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+  #pdfReport .pv-chip{border:1px solid #e6e9ef;border-left-width:4px;border-radius:8px;padding:8px 10px}
+  #pdfReport .pv-chip .n{font-size:10px;color:#5b6472;font-weight:600}
+  #pdfReport .pv-chip .v{font-size:16px;font-weight:700;margin:1px 0}
+  #pdfReport .pv-chip .d{font-size:10px;font-weight:700}
+  #pdfReport .pv-body{display:flex;gap:14px;align-items:center;margin:0 0 8px}
+  #pdfReport .pv-body svg{width:96px;flex:none}
+  #pdfReport .pv-body .bl{font-size:11px;color:#3a4250;margin:3px 0;display:flex;align-items:center;gap:7px}
+  #pdfReport .pv-body .bl i{width:9px;height:9px;border-radius:50%;display:inline-block}
   #pdfReport .psign{margin-top:26px;display:flex;justify-content:space-between;font-size:12px;color:#5b6472}
   #pdfReport .psign div{border-top:1px solid #99a2b0;padding-top:6px;width:45%}
 
@@ -1092,7 +1141,7 @@ const MAX_ANALYSIS_SEC=25; // tope para no colgar en videos largos
 async function startAnalysis(view){
   const st=V[view];
   if(!modelReady||!el(view,'video').src||st.analyzing) return;
-  st.analyzing=true; st.samples=[];
+  st.analyzing=true; st.samples=[]; st.snapshot=null; st.snapVis=0;
   el(view,'run').disabled=true; el(view,'reset').disabled=true; $('speedMode').disabled=true;
   el(view,'empty').style.display='none';
   el(view,'results').classList.remove('show'); el(view,'prog').classList.add('show');
@@ -1113,6 +1162,19 @@ async function startAnalysis(view){
       if(poses&&poses[0]){
         const kp={}; poses[0].keypoints.forEach(k=>kp[k.name]={x:k.x,y:k.y,score:(k.score==null?1:k.score)});
         st.samples.push({t,kp}); drawSkeleton(ctx,el(view,'canvas'),poses[0].keypoints);
+        // capturar el mejor frame anotado (foto real + esqueleto + ángulos) para el reporte, estilo Ochy
+        try{
+          const vis=poses[0].keypoints.filter(k=>k.score>.4).length;
+          const dur=video.duration||0, inMid=dur?(t>dur*0.2&&t<dur*0.8):true;
+          if(inMid&&vis>st.snapVis&&video.videoWidth){
+            const oc=st.snapCanvas||(st.snapCanvas=document.createElement('canvas'));
+            oc.width=video.videoWidth; oc.height=video.videoHeight;
+            const octx=oc.getContext('2d');
+            octx.drawImage(video,0,0,oc.width,oc.height);
+            octx.drawImage(el(view,'canvas'),0,0,oc.width,oc.height);
+            st.snapVis=vis; st.snapshot=oc.toDataURL('image/jpeg',0.85);
+          }
+        }catch(e){}
       }
     }catch(err){ console.warn('frame err',err); }
     const p=video.duration?Math.min(99,(t/video.duration)*100):0;
@@ -1131,6 +1193,7 @@ function finish(view){
   el(view,'run').disabled=false; el(view,'reset').disabled=false; $('speedMode').disabled=false;
   const isLat=(view==='lat'||view==='oplat');
   st.report = isLat ? computeLateral(st.samples) : computeRear(st.samples);
+  st.report.snapshot = st.snapshot;
   renderReport(view,st.report);
   if(view==='oplat'){ V.lat.report=st.report; V.lat.file=st.file; }
   else if(view==='oprear'){ V.rear.report=st.report; V.rear.file=st.file; }
@@ -1392,34 +1455,112 @@ function renderReport(view,r){
 }
 
 const SEGMENTS=[
- {key:'frontKnee',name:'Rodilla delantera al apoyo',unit:'°',good:[135,180],get:a=>a.frontKnee,
-   ok:'Ángulo ideal: buena eficiencia y menor riesgo de lesión.',
-   bad:'Rodilla delantera muy flexionada al contacto: pierde eficiencia y sube el riesgo.',
-   tip:'Imaginá un hilo que tira suave de la rodilla hacia arriba en cada paso.'},
- {key:'backKnee',name:'Rodilla trasera al apoyo',unit:'°',good:[0,91],get:a=>a.backKnee,
-   ok:'Buen "efecto muelle": rodilla flexionada, zancada más completa y económica.',
-   bad:'Rodilla trasera poco flexionada: pie más rasante, menos elasticidad.',
-   tip:'Cerrá un poco más la pierna de atrás para ganar elasticidad.'},
- {key:'trunkLean',name:'Inclinación del tronco',unit:'°',good:[5,11],get:a=>a.trunkLean,
-   ok:'Tronco idealmente inclinado hacia adelante: buen equilibrio de la zancada.',
-   bad:'Tronco fuera del rango ideal: puede desequilibrar la zancada.',
-   tip:'Pensá el torso como una torre alineada, ligeramente inclinada al frente.'},
- {key:'elbow',name:'Ángulo del brazo (codo)',unit:'°',good:[75,85],get:a=>a.elbow,
-   ok:'Codo en buen ángulo: brazos con buena amplitud.',
-   bad:'Codo muy cerrado o muy abierto: limita el balanceo y la coordinación.',
-   tip:'Relajá hombros, abrí los puños y balanceá los brazos adelante y atrás.'},
- {key:'headAngle',name:'Posición de la cabeza',unit:'°',good:[-8,2],get:a=>a.headAngle,
-   ok:'Cabeza bien colocada: buen equilibrio visual y trayectoria estable.',
-   bad:'Cabeza fuera de posición: afecta el equilibrio y la trayectoria.',
-   tip:'Fijá la mirada como un láser en un punto del horizonte.'},
+ {key:'frontKnee',illus:'knee',unit:'°',good:[135,180],get:a=>a.frontKnee,
+   titleOk:'Rodilla delantera bien extendida',titleBad:'Rodilla delantera muy flexionada',
+   ok:'La rodilla llega bien extendida al apoyo: buena eficiencia y menor riesgo de lesión.',
+   bad:'La rodilla llega demasiado flexionada al contacto: el cuerpo absorbe más carga y pierde eficiencia.',
+   consecOk:'Menor carga articular y mejor aprovechamiento de la energía elástica.',
+   consecBad:'Más tensión en cuádriceps y rótula; sobrecarga que puede derivar en dolor de rodilla.',
+   tip:'Imaginá un hilo que tira suave de la rodilla hacia arriba en cada paso; buscá aterrizar con la pierna casi extendida bajo el cuerpo.'},
+ {key:'backKnee',illus:'knee',unit:'°',good:[0,91],get:a=>a.backKnee,
+   titleOk:'Buen recobro de la pierna trasera',titleBad:'Pierna trasera poco flexionada',
+   ok:'La pierna de atrás flexiona bien la rodilla ("efecto muelle"): zancada más completa y económica.',
+   bad:'La rodilla de atrás flexiona poco: pie más rasante y menos elasticidad en el impulso.',
+   consecOk:'Zancada elástica y eficiente, con buen retorno de energía.',
+   consecBad:'Recobro más lento y mayor gasto; el pie tiende a arrastrarse.',
+   tip:'Después de empujar el piso, dejá que el talón suba hacia el glúteo; pensá "recojo el talón" en cada paso.'},
+ {key:'trunkLean',illus:'trunk',unit:'°',good:[5,11],get:a=>a.trunkLean,
+   titleOk:'Tronco con buena inclinación',titleBad:'Inclinación del tronco fuera de rango',
+   ok:'El tronco está ligeramente inclinado hacia adelante desde los tobillos: buen equilibrio de la zancada.',
+   bad:'El tronco está demasiado erguido o demasiado quebrado: desalinea la zancada y el aterrizaje.',
+   consecOk:'El centro de masa queda bien ubicado, favorece un aterrizaje bajo el cuerpo.',
+   consecBad:'Muy erguido favorece el overstride y el frenado; muy quebrado carga la zona lumbar.',
+   tip:'Inclinate desde los tobillos, no desde la cintura; torre alineada cabeza-cadera-tobillo, apenas caída al frente.'},
+ {key:'elbow',illus:'elbow',unit:'°',good:[75,85],get:a=>a.elbow,
+   titleOk:'Brazos con buen ángulo de codo',titleBad:'Ángulo de codo fuera de rango',
+   ok:'El codo mantiene un ángulo cercano a 90°: brazos con buena amplitud y ritmo.',
+   bad:'El codo está demasiado cerrado o demasiado abierto: limita el balanceo y coordina peor con las piernas.',
+   consecOk:'El braceo acompaña la cadencia y estabiliza el tronco.',
+   consecBad:'Braceo ineficiente que gasta energía y puede tensar hombros y cuello.',
+   tip:'Relajá hombros, abrí apenas los puños y balanceá los brazos adelante-atrás (no cruzando la línea media), codo cerca de 90°.'},
+ {key:'headAngle',illus:'head',unit:'°',good:[-8,2],get:a=>a.headAngle,
+   titleOk:'Cabeza bien colocada',titleBad:'Posición de la cabeza a corregir',
+   ok:'La cabeza está alineada con el tronco y la mirada al frente: buen equilibrio visual y trayectoria estable.',
+   bad:'La cabeza está caída o hacia atrás respecto del tronco: afecta el equilibrio y tensiona el cuello.',
+   consecOk:'Una cabeza bien colocada contribuye al equilibrio y a una trayectoria constante.',
+   consecBad:'La mala posición carga la cervical y desestabiliza la postura general.',
+   tip:'Fijá la mirada como un láser en un punto del horizonte; llevá la coronilla al cielo y relajá la mandíbula.'},
 ];
 function segStatus(v,good){ if(v==null)return null; const lo=good[0],hi=good[1]; if(v>=lo&&v<=hi)return 'b-good'; const m=v<lo?lo-v:v-hi, span=(hi-lo)||10; return m<=span*0.5?'b-warn':'b-bad'; }
+/* ---- Ilustraciones anatómicas por segmento (estilo Ochy): miembros rellenos + ideal punteado ---- */
+function segStroke(cls){return cls==='b-good'?'var(--good)':cls==='b-warn'?'var(--warn)':'var(--bad)';}
+function angBadge(x,y,A){return `<rect x="${x}" y="${y-13}" width="46" height="24" rx="6" fill="var(--accent)"/><text x="${x+23}" y="${y+4}" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="15" font-weight="700" fill="#1a0f08">${Math.round(A)}°</text>`;}
+function shoePath(ax,ay,col){return `<path d="M${ax-10} ${ay+6} Q${ax-13} ${ay+15} ${ax-2} ${ay+16} L${ax+30} ${ay+16} Q${ax+40} ${ay+16} ${ax+38} ${ay+7} L${ax+28} ${ay+2} Q${ax+8} ${ay-2} ${ax-10} ${ay+6} Z" fill="${col}"/>`;}
+function illusLeg(A,cls,good){ // pierna de perfil, rodilla en A
+  const col=segStroke(cls), hip=[92,30], knee=[92,118], Lc=74;
+  const rad=(A-90)*Math.PI/180, ank=[knee[0]+Lc*Math.cos(rad), knee[1]+Lc*Math.sin(rad)];
+  const gm=(good[0]+good[1])/2, irad=(gm-90)*Math.PI/180, iank=[knee[0]+Lc*Math.cos(irad), knee[1]+Lc*Math.sin(irad)];
+  return `<svg viewBox="0 0 200 220" width="100%" style="max-width:190px">
+    <line x1="92" y1="14" x2="92" y2="212" stroke="var(--line-strong)" stroke-width="1.5" stroke-dasharray="3 6"/>
+    <path d="M${knee[0]} ${knee[1]} L${iank[0].toFixed(1)} ${iank[1].toFixed(1)}" stroke="var(--ink-mute)" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 7" opacity=".7"/>
+    <path d="M${hip[0]} ${hip[1]} L${knee[0]} ${knee[1]}" stroke="${col}" stroke-width="26" stroke-linecap="round"/>
+    <path d="M${knee[0]} ${knee[1]} L${ank[0].toFixed(1)} ${ank[1].toFixed(1)}" stroke="${col}" stroke-width="20" stroke-linecap="round"/>
+    ${shoePath(ank[0],ank[1],col)}
+    <circle cx="${knee[0]}" cy="${knee[1]}" r="7" fill="#1a0f08" opacity=".25"/>
+    ${angBadge(knee[0]+16,knee[1],A)}</svg>`;
+}
+function illusArm(A,cls,good){ const col=segStroke(cls), sh=[74,34], el=[74,110], Lf=60;
+  const rad=(A-90)*Math.PI/180, wr=[el[0]+Lf*Math.cos(rad), el[1]+Lf*Math.sin(rad)];
+  const gm=(good[0]+good[1])/2, irad=(gm-90)*Math.PI/180, iwr=[el[0]+Lf*Math.cos(irad), el[1]+Lf*Math.sin(irad)];
+  return `<svg viewBox="0 0 200 200" width="100%" style="max-width:180px">
+    <path d="M${el[0]} ${el[1]} L${iwr[0].toFixed(1)} ${iwr[1].toFixed(1)}" stroke="var(--ink-mute)" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 7" opacity=".7"/>
+    <path d="M${sh[0]} ${sh[1]} L${el[0]} ${el[1]}" stroke="${col}" stroke-width="22" stroke-linecap="round"/>
+    <path d="M${el[0]} ${el[1]} L${wr[0].toFixed(1)} ${wr[1].toFixed(1)}" stroke="${col}" stroke-width="17" stroke-linecap="round"/>
+    <circle cx="${wr[0].toFixed(1)}" cy="${wr[1].toFixed(1)}" r="11" fill="${col}"/>
+    <circle cx="${el[0]}" cy="${el[1]}" r="6" fill="#1a0f08" opacity=".25"/>
+    ${angBadge(el[0]+14,el[1],A)}</svg>`;
+}
+function illusTrunk(A,cls,good){ const col=segStroke(cls), hip=[100,192], Lt=118;
+  const rad=A*Math.PI/180, sh=[hip[0]+Lt*Math.sin(rad), hip[1]-Lt*Math.cos(rad)], head=[sh[0]+16*Math.sin(rad), sh[1]-16*Math.cos(rad)];
+  const gm=(good[0]+good[1])/2, ir=gm*Math.PI/180, ish=[hip[0]+Lt*Math.sin(ir), hip[1]-Lt*Math.cos(ir)];
+  return `<svg viewBox="0 0 200 220" width="100%" style="max-width:180px">
+    <line x1="${hip[0]}" y1="18" x2="${hip[0]}" y2="206" stroke="var(--line-strong)" stroke-width="1.5" stroke-dasharray="3 6"/>
+    <path d="M${hip[0]} ${hip[1]} L${ish[0].toFixed(1)} ${ish[1].toFixed(1)}" stroke="var(--ink-mute)" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 8" opacity=".7"/>
+    <path d="M${hip[0]} ${hip[1]} L${sh[0].toFixed(1)} ${sh[1].toFixed(1)}" stroke="${col}" stroke-width="30" stroke-linecap="round"/>
+    <circle cx="${head[0].toFixed(1)}" cy="${head[1].toFixed(1)}" r="20" fill="${col}"/>
+    ${angBadge(hip[0]+14,hip[1]-64,A)}</svg>`;
+}
+function illusHead(A,cls,good){ const col=segStroke(cls), c=[104,96];
+  const rad=(A-90)*Math.PI/180, L=52, gaze=[c[0]+L*Math.cos(rad), c[1]+L*Math.sin(rad)];
+  // cabeza de perfil rellena (mirando a la derecha) + cuello
+  const head=`<path d="M84 74 Q86 54 108 52 Q132 52 136 74 Q138 88 132 96 L140 100 Q142 104 137 106 L131 107 Q129 120 116 124 L110 138 L92 138 Q86 120 86 112 Q80 100 84 74 Z" fill="${col}"/>`;
+  const neck=`<path d="M96 132 L114 132 L118 156 L92 156 Z" fill="${col}" opacity=".85"/>`;
+  return `<svg viewBox="0 0 200 190" width="100%" style="max-width:180px">
+    <line x1="40" y1="96" x2="176" y2="96" stroke="var(--line-strong)" stroke-width="1.5" stroke-dasharray="3 6"/>
+    ${neck}${head}
+    <line x1="${c[0]}" y1="${c[1]}" x2="${gaze[0].toFixed(1)}" y2="${gaze[1].toFixed(1)}" stroke="var(--accent)" stroke-width="4.5" stroke-linecap="round"/>
+    <circle cx="${gaze[0].toFixed(1)}" cy="${gaze[1].toFixed(1)}" r="6" fill="var(--accent)"/>
+    ${angBadge(140,60,A)}</svg>`;
+}
+function segIllus(seg,v,cls){ if(seg.illus==='knee')return illusLeg(v,cls,seg.good); if(seg.illus==='elbow')return illusArm(v,cls,seg.good); if(seg.illus==='trunk')return illusTrunk(v,cls,seg.good); if(seg.illus==='head')return illusHead(v,cls,seg.good); return ''; }
+function ochyCard(title,cls,illusHtml,angleTxt,rangeTxt,boxes){
+  const boxHtml=boxes.map(b=>`<div class="obox"><b>${b.h}</b>${b.p}</div>`).join('');
+  return `<div class="ocard ${cls}"><div class="ocard-h">${title}</div><div class="ocard-b">
+    <div class="ocard-viz"><div class="fig">${illusHtml}</div><div class="ocard-meta"><b>Ángulo:</b> ${angleTxt}</div><div class="ocard-meta"><b>Buen intervalo:</b> ${rangeTxt}</div></div>
+    <div class="ocard-boxes">${boxHtml}</div></div></div>`;
+}
 function postureCards(a){
   if(!a||a.anglesN<3) return '';
-  let html='<div class="metric" style="border-left-color:var(--blue)"><div class="top"><span class="name">🧍 Postura y ángulos al apoyo · provisional</span></div><p class="desc" style="margin-top:2px">Ángulos articulares en el apoyo. Rangos de referencia (ejemplos Ochy; Folland 2017), a calibrar con el piloto.</p></div>';
+  let html='<h3 class="sec-h">Análisis por segmento</h3>';
   SEGMENTS.forEach(seg=>{ const v=seg.get(a); if(v==null)return; const st=segStatus(v,seg.good), inR=st==='b-good';
-    html+=metricCard({name:seg.name,val:v.toFixed(0),unit:seg.unit,bandClass:st,bandLabel:inR?'En rango':st==='b-warn'?'Cerca':'Fuera',
-      desc:(inR?seg.ok:seg.bad)+' <b>Consejo:</b> '+seg.tip,ref:'Rango bueno: '+seg.good[0]+'–'+seg.good[1]+seg.unit+'. Provisional.'}); });
+    const title=inR?seg.titleOk:seg.titleBad;
+    const boxes=[
+      {h:'Resumen',p:inR?seg.ok:seg.bad},
+      {h:'Consecuencias',p:inR?seg.consecOk:seg.consecBad},
+      {h:'Corrección',p:seg.tip}
+    ];
+    html+=ochyCard(title,st,segIllus(seg,v,st),v.toFixed(0)+seg.unit,seg.good[0]+seg.unit+' ; '+seg.good[1]+seg.unit,boxes);
+  });
   return html;
 }
 function computeScore(r){
@@ -1478,10 +1619,108 @@ function computeStyle(r){
     :'Corrés más rasante, con apoyos largos y poco rebote. Estilo "terrestre": eficiente a ritmos de fondo, se apoya en cadencia y rodaje.';
   return {score,label,desc};
 }
+/* ---- Resumen visual para el paciente (dial + chips + mapa corporal) ---- */
+function pVerdict(cls){return cls==='b-good'?'Muy bien':cls==='b-warn'?'A mejorar':cls==='b-bad'?'Prestá atención':'Informativo';}
+function segCls(a,key){const seg=SEGMENTS.find(s=>s.key===key);if(!seg||!a)return null;const v=seg.get(a);if(v==null)return null;return segStatus(v,seg.good);}
+function worstCls(list){let w='b-good';list.forEach(c=>{if(c==='b-bad')w='b-bad';else if(c==='b-warn'&&w!=='b-bad')w='b-warn';});return list.some(c=>c)?w:null;}
+function donutGauge(score){
+  const R=42,C=2*Math.PI*R,off=C*(1-score/100),col=score>=75?'var(--good)':score>=55?'var(--warn)':'var(--bad)';
+  return `<svg viewBox="0 0 110 110" width="104" height="104" aria-hidden="true">
+    <circle cx="55" cy="55" r="${R}" fill="none" stroke="var(--line)" stroke-width="10"/>
+    <circle cx="55" cy="55" r="${R}" fill="none" stroke="${col}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 55 55)"/>
+    <text x="55" y="53" text-anchor="middle" font-family="'JetBrains Mono',monospace" font-size="27" font-weight="700" fill="${col}">${score}</text>
+    <text x="55" y="71" text-anchor="middle" font-size="10" fill="var(--ink-mute)">de 100</text></svg>`;
+}
+function bodyMap(regions){
+  const dot=(x,y,cls)=>cls?`<circle cx="${x}" cy="${y}" r="6.5" fill="${colVar(cls)}" stroke="var(--surface)" stroke-width="2.5"/>`:'';
+  const R={};regions.forEach(r=>R[r.key]=r.cls);
+  const fig=`<svg viewBox="0 0 120 200" aria-hidden="true">
+    <g fill="none" stroke="var(--ink-soft)" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" opacity=".85">
+      <circle cx="58" cy="24" r="12"/>
+      <path d="M58 36 L55 104"/>
+      <path d="M56 52 L79 76 L71 95"/>
+      <path d="M56 52 L37 73 L45 91"/>
+      <path d="M55 104 L84 132 L96 167"/>
+      <path d="M55 104 L41 138 L31 175"/>
+    </g>
+    ${dot(58,24,R.cabeza)}${dot(78,77,R.brazo)}${dot(56,72,R.tronco)}${dot(55,104,R.cadera)}${dot(84,132,R.rodilla)}${dot(95,166,R.pie)}
+  </svg>`;
+  const legend=regions.filter(r=>r.cls).map(r=>`<div class="bl-row"><span class="bl-dot" style="background:${colVar(r.cls)}"></span><b>${r.name}:</b>&nbsp;${pVerdict(r.cls)}</div>`).join('');
+  return `<div class="vbody">${fig}<div class="vbody-leg">${legend}</div></div>`;
+}
+function colVar(cls){return cls==='b-good'?'var(--good)':cls==='b-warn'?'var(--warn)':cls==='b-bad'?'var(--bad)':'var(--blue)';}
+function visualSummary(r){
+  const sc=computeScore(r); const a=r.angles;
+  const cad=Math.round(r.cadence), cadCls=cad>=170?'b-good':cad>=160?'b-warn':'b-bad';
+  const voCls=r.voCm!=null?band(r.voCm,9,13):r.voPct!=null?band(r.voPct,5.5,8):null;
+  const ovCls=r.overOffset!=null?(r.overOffset<=0.15?'b-good':r.overOffset<=0.30?'b-warn':'b-bad'):null;
+  const postCls=a?worstCls(SEGMENTS.map(s=>segCls(a,s.key))):null;
+  const segShort={frontKnee:'Rodillas',backKnee:'Rodillas',trunkLean:'Tronco',elbow:'Brazos',headAngle:'Cabeza'};
+  let postArea=null; if(a&&postCls&&postCls!=='b-good'){ const bad=SEGMENTS.find(s=>segCls(a,s.key)===postCls); if(bad) postArea=segShort[bad.key]||bad.name; }
+  const symCls=(r.gait&&r.gait.symmetry!=null)?(r.gait.symmetry<=5?'b-good':r.gait.symmetry<=10?'b-warn':'b-bad'):null;
+  const style=computeStyle(r);
+  // chips
+  const chips=[];
+  chips.push({ic:'👟',name:'Cadencia',val:cad+' <small style="font-size:.6em;color:var(--ink-mute)">spm</small>',cls:cadCls});
+  if(voCls) chips.push({ic:'↕️',name:'Rebote vertical',val:(r.voCm!=null?r.voCm.toFixed(1)+' cm':r.voPct.toFixed(1)+'%'),cls:voCls});
+  if(ovCls) chips.push({ic:'🎯',name:'Aterrizaje del pie',val:(r.overOffset*100).toFixed(0)+'%',cls:ovCls});
+  if(postCls) chips.push({ic:'🧍',name:'Postura',val:postCls==='b-good'?'✓':(postArea||'Revisar'),cls:postCls});
+  if(symCls) chips.push({ic:'⚖️',name:'Simetría izq/der',val:r.gait.symmetry.toFixed(0)+'%',cls:symCls});
+  if(style) chips.push({ic:'🏃',name:'Estilo',val:style.label,cls:'b-info'});
+  const chipsHtml=chips.map(c=>`<div class="vchip ${c.cls}"><div class="vc-top"><span class="vc-ic">${c.ic}</span><span class="vc-name">${c.name}</span></div><div class="vc-val">${c.val}</div><div class="vc-verd">${c.cls==='b-info'?'Tu estilo':pVerdict(c.cls)}</div></div>`).join('');
+  // titular en lenguaje simple
+  const worst=chips.filter(c=>c.cls==='b-bad');const mid=chips.filter(c=>c.cls==='b-warn');
+  let head,lead;
+  if(worst.length) head='Hay margen claro de mejora';
+  else if(mid.length>=2) head='Buena base, con detalles para pulir';
+  else if(mid.length===1) head='Muy bien, con un detalle a pulir';
+  else head='Tu técnica está muy bien 👏';
+  if(worst.length) lead=`Lo primero para trabajar: <b>${worst[0].name.toLowerCase()}</b>${worst.length>1?' y '+worst[1].name.toLowerCase():''}. Mirá el detalle más abajo.`;
+  else if(mid.length) lead=`Casi todo en verde. A pulir: <b>${mid[0].name.toLowerCase()}</b>. Mirá el detalle más abajo.`;
+  else lead='Todos los indicadores principales en verde. Seguí así 🙌';
+  // mapa corporal
+  const regions=[
+    {key:'cabeza',name:'Cabeza',cls:segCls(a,'headAngle')},
+    {key:'brazo',name:'Brazos',cls:segCls(a,'elbow')},
+    {key:'tronco',name:'Tronco',cls:segCls(a,'trunkLean')},
+    {key:'cadera',name:'Aterrizaje',cls:ovCls},
+    {key:'rodilla',name:'Rodillas',cls:worstCls([segCls(a,'frontKnee'),segCls(a,'backKnee')])},
+    {key:'pie',name:'Cadencia/pie',cls:cadCls},
+  ];
+  const snap=r.snapshot?`<figure style="margin:0 0 14px"><img src="${r.snapshot}" alt="Tu carrera con el análisis de pose" style="width:100%;border-radius:12px;display:block"/><figcaption style="font-size:.72rem;color:var(--ink-mute);margin-top:6px;text-align:center">Tu carrera con los ángulos detectados sobre el cuerpo</figcaption></figure>`:'';
+  return `<div class="vsum">${snap}<div class="vsum-hd">${sc!=null?`<div class="vsum-gauge">${donutGauge(sc)}</div>`:''}<div class="vsum-lead"><h3>${head}</h3><p>${lead}</p></div></div>
+    <div class="vchips">${chipsHtml}</div>
+    <p style="font-size:.72rem;color:var(--ink-mute);margin:14px 0 0">Resumen para lectura rápida. El detalle técnico y las referencias científicas están debajo. Valores provisionales, no reemplaza evaluación profesional.</p></div>`;
+}
+function pdfVisual(L){
+  const pcol=cls=>cls==='b-good'?'#1f7a54':cls==='b-warn'?'#9a6a12':cls==='b-bad'?'#a6413d':'#2f5f9e';
+  const sc=computeScore(L), a=L.angles;
+  const cad=Math.round(L.cadence), cadCls=cad>=170?'b-good':cad>=160?'b-warn':'b-bad';
+  const voCls=L.voCm!=null?band(L.voCm,9,13):L.voPct!=null?band(L.voPct,5.5,8):null;
+  const ovCls=L.overOffset!=null?(L.overOffset<=0.15?'b-good':L.overOffset<=0.30?'b-warn':'b-bad'):null;
+  const postCls=a?worstCls(SEGMENTS.map(s=>segCls(a,s.key))):null;
+  const segShortP={frontKnee:'Rodillas',backKnee:'Rodillas',trunkLean:'Tronco',elbow:'Brazos',headAngle:'Cabeza'};
+  let postAreaP=null; if(a&&postCls&&postCls!=='b-good'){ const bad=SEGMENTS.find(s=>segCls(a,s.key)===postCls); if(bad) postAreaP=segShortP[bad.key]; }
+  const symCls=(L.gait&&L.gait.symmetry!=null)?(L.gait.symmetry<=5?'b-good':L.gait.symmetry<=10?'b-warn':'b-bad'):null;
+  const style=computeStyle(L);
+  const chips=[{n:'Cadencia',v:cad+' spm',cls:cadCls}];
+  if(voCls) chips.push({n:'Rebote vertical',v:(L.voCm!=null?L.voCm.toFixed(1)+' cm':L.voPct.toFixed(1)+'%'),cls:voCls});
+  if(ovCls) chips.push({n:'Aterrizaje del pie',v:(L.overOffset*100).toFixed(0)+'%',cls:ovCls});
+  if(postCls) chips.push({n:'Postura',v:postCls==='b-good'?'OK':(postAreaP||'Revisar'),cls:postCls});
+  if(symCls) chips.push({n:'Simetría izq/der',v:L.gait.symmetry.toFixed(0)+'%',cls:symCls});
+  if(style) chips.push({n:'Estilo',v:style.label,cls:'b-info'});
+  const chipsHtml=chips.map(c=>`<div class="pv-chip" style="border-left-color:${pcol(c.cls)}"><div class="n">${c.n}</div><div class="v" style="color:${pcol(c.cls)}">${c.v}</div><div class="d" style="color:${pcol(c.cls)}">${c.cls==='b-info'?'Tu estilo':pVerdict(c.cls)}</div></div>`).join('');
+  const worst=chips.filter(c=>c.cls==='b-bad'),mid=chips.filter(c=>c.cls==='b-warn');
+  const head=worst.length?'Hay margen claro de mejora':mid.length>=2?'Buena base, con detalles para pulir':mid.length===1?'Muy bien, con un detalle a pulir':'Tu técnica está muy bien';
+  const lead=worst.length?`Lo primero para trabajar: ${worst.map(c=>c.n.toLowerCase()).slice(0,2).join(' y ')}.`:mid.length?`Casi todo en verde. A pulir: ${mid[0].n.toLowerCase()}.`:'Todos los indicadores principales en verde.';
+  const R=40,Cc=2*Math.PI*R,off=Cc*(1-(sc||0)/100),gcol=sc>=75?'#1f7a54':sc>=55?'#9a6a12':'#a6413d';
+  const donut=sc!=null?`<svg viewBox="0 0 100 100" width="86" height="86"><circle cx="50" cy="50" r="${R}" fill="none" stroke="#e6e9ef" stroke-width="9"/><circle cx="50" cy="50" r="${R}" fill="none" stroke="${gcol}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${Cc.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 50 50)"/><text x="50" y="49" text-anchor="middle" font-family="Helvetica,Arial" font-size="24" font-weight="700" fill="${gcol}">${sc}</text><text x="50" y="65" text-anchor="middle" font-size="9" fill="#5b6472">de 100</text></svg>`:'';
+  const snap=L.snapshot?`<img src="${L.snapshot}" alt="Tu carrera analizada" style="width:60%;max-width:320px;border-radius:10px;display:block;margin:0 auto 12px"/>`:'';
+  return `${snap}<div class="pv">${donut}<div class="pv-lead"><h3>${head}</h3><p>${lead}</p></div></div><div class="pv-chips">${chipsHtml}</div>`;
+}
 function lateralCards(r){
   let html='';
-  const sc=computeScore(r);
-  if(sc!=null) html+=`<div class="scorecard" style="margin-bottom:16px"><div class="big" style="color:${sc>=75?'var(--good)':sc>=55?'var(--warn)':'var(--bad)'}">${sc}%</div><div class="lab">Puntuación de análisis</div></div>`;
+  html+=visualSummary(r);
   const cad=Math.round(r.cadence);
   html+=metricCard({name:'Cadencia',conf:'Confianza alta',val:cad,unit:'pasos/min',
     bandClass:cad>=170?'b-good':cad>=160?'b-warn':'b-bad',bandLabel:cad>=170?'En rango':cad>=160?'Mejorable':'Baja',
@@ -1668,7 +1907,7 @@ function buildPdf(opts){
       if(g.footStrike) rows+=metricRow('Patrón de pisada',g.footStrike,'','b-good','Descriptivo');
     }
     { const stl=computeStyle(L); if(stl) rows+=metricRow('Estilo de carrera',stl.label,stl.score+'/100 → aéreo','b-good','Descriptivo'); }
-    if(L.angles&&L.angles.anglesN>=3){ SEGMENTS.forEach(seg=>{const v=seg.get(L.angles); if(v!=null){const st=segStatus(v,seg.good); rows+=metricRow(seg.name,v.toFixed(0),'°',st,st==='b-good'?'En rango':st==='b-warn'?'Cerca':'Fuera');}}); }
+    if(L.angles&&L.angles.anglesN>=3){ SEGMENTS.forEach(seg=>{const v=seg.get(L.angles); if(v!=null){const st=segStatus(v,seg.good); rows+=metricRow(st==='b-good'?seg.titleOk:seg.titleBad,v.toFixed(0),'°',st,st==='b-good'?'En rango':st==='b-warn'?'Cerca':'Fuera');}}); }
   }
   if(R&&R.enough){
     if(R.cpd!=null) rows+=metricRow('Caída pélvica contralateral',R.cpd.toFixed(0),'° pico',R.cpd<=6?'b-good':R.cpd<=10?'b-warn':'b-bad',R.cpd<=6?'Neutral':R.cpd<=10?'Leve':'Marcado');
@@ -1685,6 +1924,7 @@ function buildPdf(opts){
   $('pdfReport').innerHTML=`
     <h1>CORREXO · Reporte de screening biomecánico</h1>
     <div class="pmeta">Corredor: <b>${runner}</b> · Fecha: ${date}${pro?' · Profesional: <b>'+pro+'</b>':''}</div>
+    ${(L&&L.enough)?'<h2>Resumen visual</h2>'+pdfVisual(L):''}
     <h2>Índice de screening: ${idx}/100${(L&&L.enough&&computeScore(L)!=null)?' · Puntuación de análisis: '+computeScore(L)+'%':''}</h2>
     ${findings}
     <h2>Métricas medidas</h2>
