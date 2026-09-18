@@ -166,7 +166,10 @@
   .ocard.b-good .ocard-h{color:var(--good)} .ocard.b-warn .ocard-h{color:var(--warn)} .ocard.b-bad .ocard-h{color:var(--bad)}
   .ocard-b{display:grid;grid-template-columns:.9fr 1.1fr;gap:12px;padding:14px}
   .ocard-viz{display:flex;flex-direction:column;gap:8px}
-  .ocard-viz .fig{background:var(--surface);border:1px solid var(--line);border-radius:10px;min-height:170px;display:grid;place-items:center;padding:10px}
+  .ocard-viz .fig{background:#5d5d5d;border:1px solid var(--line);border-radius:10px;min-height:170px;display:grid;place-items:center;padding:0;overflow:hidden}
+  .ocard-viz .fig img{width:100%;height:auto;display:block}
+  .part-fig{position:relative;width:100%}
+  .part-badge{position:absolute;top:8px;right:8px;background:var(--accent);color:#1a0f08;font-family:var(--mono);font-weight:700;font-size:.95rem;padding:3px 9px;border-radius:7px;box-shadow:0 1px 4px rgba(0,0,0,.35)}
   .ocard-meta{font-size:.82rem;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;color:var(--ink-soft)}
   .ocard-meta b{color:var(--accent)}
   .ocard-boxes{display:flex;flex-direction:column;gap:8px}
@@ -1522,61 +1525,18 @@ function wedge(cx,cy,p1,p2,r,col){
 }
 function bDot(x,y,col){return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5.5" fill="${col}" stroke="#fff" stroke-width="2"/>`;}
 function bSeg(a,b,col){return `<line x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}" stroke="${col}" stroke-width="4" stroke-linecap="round"/>`;}
-function illusLeg(A,cls,good){ // pierna: silueta blanca + esqueleto de color + cuña de ángulo
-  const col=segStroke(cls), hip=[94,30], knee=[94,120], Lc=70, rad=(A-90)*Math.PI/180;
-  const ank=[knee[0]+Lc*Math.cos(rad), knee[1]+Lc*Math.sin(rad)], dir=ank[0]>=knee[0]?1:-1;
-  return `<svg viewBox="0 0 200 225" width="100%" style="max-width:185px">
-    ${limb(hip,knee,15,11,SIL)}${limb(knee,ank,11,6,SIL)}
-    ${shoeAt(ank[0],ank[1],dir)}
-    ${bSeg(hip,knee,col)}${bSeg(knee,ank,col)}
-    ${wedge(knee[0],knee[1],hip,ank,34,col)}
-    ${bDot(hip[0],hip[1],col)}${bDot(knee[0],knee[1],col)}${bDot(ank[0],ank[1],col)}
-    ${angBadge(knee[0]+20,knee[1]-4,A)}</svg>`;
+// ilustración = imagen real (silueta) sobre panel gris + badge de ángulo; mirror para izq/der
+function partImg(src,A,opt){opt=opt||{};
+  const mir=opt.mirror?'transform:scaleX(-1);':'';
+  const badge=(A==null)?'':`<span class="part-badge">${Math.round(A)}°</span>`;
+  return `<div class="part-fig"><img src="assets/parts/${src}" alt="" loading="lazy" style="${mir}">${badge}</div>`;
 }
-function illusArm(A,cls){ const col=segStroke(cls), sh=[70,30], el=[70,112], Lf=58, rad=(A-90)*Math.PI/180;
-  const wr=[el[0]+Lf*Math.cos(rad), el[1]+Lf*Math.sin(rad)];
-  // mano: silueta blanca simple al final del antebrazo
-  const hand=`<circle cx="${wr[0].toFixed(1)}" cy="${wr[1].toFixed(1)}" r="12" fill="${SIL}"/>`;
-  return `<svg viewBox="0 0 200 195" width="100%" style="max-width:175px">
-    ${limb(sh,el,12,9,SIL)}${limb(el,wr,9,7,SIL)}${hand}
-    ${bSeg(sh,el,col)}${bSeg(el,wr,col)}
-    ${wedge(el[0],el[1],sh,wr,32,col)}
-    ${bDot(sh[0],sh[1],col)}${bDot(el[0],el[1],col)}${bDot(wr[0],wr[1],col)}
-    ${angBadge(el[0]+16,el[1]-2,A)}</svg>`;
-}
-function illusTrunk(A,cls){ const col=segStroke(cls), hip=[100,198], Lt=110, rad=A*Math.PI/180;
-  const sh=[hip[0]+Lt*Math.sin(rad), hip[1]-Lt*Math.cos(rad)], head=[sh[0]+28*Math.sin(rad), sh[1]-28*Math.cos(rad)];
-  return `<svg viewBox="0 0 200 225" width="100%" style="max-width:165px">
-    <line x1="${hip[0]}" y1="16" x2="${hip[0]}" y2="214" stroke="var(--line-strong)" stroke-width="1.5" stroke-dasharray="3 6"/>
-    ${limb(hip,sh,15,19,SIL)}
-    <circle cx="${head[0].toFixed(1)}" cy="${head[1].toFixed(1)}" r="18" fill="${SIL}"/>
-    ${bSeg(hip,sh,col)}
-    ${bDot(hip[0],hip[1],col)}${bDot(sh[0],sh[1],col)}
-    ${angBadge(hip[0]+14,hip[1]-56,A)}</svg>`;
-}
-function illusHead(A,cls){ const col=segStroke(cls), neck=[100,152];
-  return `<svg viewBox="0 0 200 190" width="100%" style="max-width:165px">
-    <line x1="42" y1="152" x2="176" y2="152" stroke="var(--line-strong)" stroke-width="1.5" stroke-dasharray="3 6"/>
-    <g transform="rotate(${A} ${neck[0]} ${neck[1]})">
-      <path d="M92 150 L92 118 Q80 100 84 78 Q88 46 116 46 Q142 46 144 76 Q145 88 140 96 L148 102 Q151 106 145 108 L138 109 Q136 124 122 128 L118 150 Z" fill="${SIL}"/>
-      ${bSeg([80,80],[128,80],col)}
-      ${bDot(80,80,col)}${bDot(128,80,col)}
-    </g>
-    ${angBadge(140,50,A)}</svg>`;
-}
+function illusLeg(A,cls,good){ return partImg('pierna.png',A); }
+function illusArm(A,cls){ return partImg('brazo.png',A); }
+function illusTrunk(A,cls){ return partImg('torso.png',A); }
+function illusHead(A,cls){ return partImg('cabeza.png',A); }
 function segIllus(seg,v,cls){ if(seg.illus==='knee')return illusLeg(v,cls,seg.good); if(seg.illus==='elbow')return illusArm(v,cls); if(seg.illus==='trunk')return illusTrunk(v,cls); if(seg.illus==='head')return illusHead(v,cls); return ''; }
-function illusOverstride(shankDeg,cls){ const col=segStroke(cls), hip=[76,32], knee=[96,112], Lc=74, rad=shankDeg*Math.PI/180;
-  const ank=[knee[0]+Lc*Math.sin(rad), knee[1]+Lc*Math.cos(rad)], dir=ank[0]>=knee[0]?1:-1, down=[knee[0],knee[1]+Lc];
-  return `<svg viewBox="0 0 210 220" width="100%" style="max-width:200px">
-    <line x1="${knee[0]}" y1="18" x2="${knee[0]}" y2="212" stroke="var(--line-strong)" stroke-width="1.5" stroke-dasharray="3 6"/>
-    <text x="${knee[0]-4}" y="28" text-anchor="end" font-size="9" fill="var(--ink-mute)">centro de masa</text>
-    ${limb(hip,knee,15,11,SIL)}${limb(knee,ank,11,6,SIL)}
-    ${shoeAt(ank[0],ank[1],dir)}
-    ${bSeg(hip,knee,col)}${bSeg(knee,ank,col)}
-    ${wedge(knee[0],knee[1],down,ank,40,col)}
-    ${bDot(hip[0],hip[1],col)}${bDot(knee[0],knee[1],col)}${bDot(ank[0],ank[1],col)}
-    ${angBadge(ank[0]+10,ank[1]-6,shankDeg)}</svg>`;
-}
+function illusOverstride(shankDeg,cls){ return partImg('pierna.png',shankDeg); }
 function ochyCard(title,cls,illusHtml,angleTxt,rangeTxt,boxes){
   const boxHtml=boxes.map(b=>`<div class="obox"><b>${b.h}</b>${b.p}</div>`).join('');
   return `<div class="ocard ${cls}"><div class="ocard-h">${title}</div><div class="ocard-b">
