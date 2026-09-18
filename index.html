@@ -1297,29 +1297,50 @@ function computeLateral(S){
     gait:computeGait(b), angles:computeAngles(b), curves:computeCurves(b)});
 }
 
-/* ---------- TRASERA ---------- */
+/* ---------- TRASERA (plano frontal) — por lado (izq/der), estilo Ochy ----------
+   Límite conocido: la pose 2D es débil en plano frontal (ICC tobillo ~0.16). Provisional/experimental. */
 function computeRear(S){
   const b=computeBase(S);
-  // caída pélvica: ángulo de la línea de caderas respecto de la horizontal
-  const angs=[];
-  S.forEach(s=>{const lh=s.kp['left_hip'],rh=s.kp['right_hip'];if(lh&&rh&&lh.score>.3&&rh.score>.3){angs.push(Math.atan2(rh.y-lh.y,rh.x-lh.x)*180/Math.PI);}});
-  let cpd=null;
-  if(angs.length>5){ const med=median(angs); const dev=angs.map(a=>Math.abs(a-med)); cpd=quantile(dev,0.92); }
-  // valgo dinámico: desvío frontal de la rodilla respecto de la línea cadera-tobillo, normalizado por largo de pierna, en apoyo
-  const valg=[];
+  // referencia de nivel de la pelvis
+  const pelAll=[]; S.forEach(s=>{const lh=s.kp['left_hip'],rh=s.kp['right_hip'];if(lh&&rh&&lh.score>.3&&rh.score>.3)pelAll.push(Math.atan2(rh.y-lh.y,rh.x-lh.x)*180/Math.PI);});
+  const pelLevel=pelAll.length?median(pelAll):0;
+  const midX=(kp)=>{const lh=kp['left_hip'],rh=kp['right_hip'];return (lh&&rh)?(lh.x+rh.x)/2:null;};
+  const bySide={left:{pel:[],knee:[],foot:[]},right:{pel:[],knee:[],foot:[]}};
   b.peaks.forEach(pi=>{
     const tp=b.t[pi]; let best=null,bd=1e9; S.forEach(s=>{const d=Math.abs(s.t-tp);if(d<bd){bd=d;best=s;}}); if(!best)return;
-    let footSide=null,fy=-1; ['left','right'].forEach(side=>{const a=best.kp[side+'_ankle'];if(a&&a.score>.3&&a.y>fy){fy=a.y;footSide=side;}}); if(!footSide)return;
-    const h=best.kp[footSide+'_hip'],k=best.kp[footSide+'_knee'],a=best.kp[footSide+'_ankle'];
-    if(h&&k&&a&&h.score>.3&&k.score>.3&&a.score>.3){
-      const L=Math.hypot(a.x-h.x,a.y-h.y); if(L<1)return;
-      // distancia perpendicular de la rodilla a la línea cadera->tobillo
-      const dperp=Math.abs((a.y-h.y)*k.x-(a.x-h.x)*k.y+a.x*h.y-a.y*h.x)/L;
-      valg.push(dperp/L);
+    const k=best.kp;
+    let side=null,fy=-1; ['left','right'].forEach(sd=>{const a=k[sd+'_ankle'];if(a&&a.score>.3&&a.y>fy){fy=a.y;side=sd;}}); if(!side)return;
+    // pelvis: caída contralateral (magnitud del desnivel en el apoyo)
+    const lh=k['left_hip'],rh=k['right_hip'];
+    if(lh&&rh&&lh.score>.3&&rh.score>.3) bySide[side].pel.push(Math.abs(Math.atan2(rh.y-lh.y,rh.x-lh.x)*180/Math.PI - pelLevel));
+    const h=k[side+'_hip'],kn=k[side+'_knee'],an=k[side+'_ankle'];
+    if(h&&kn&&an&&h.score>.3&&kn.score>.3&&an.score>.3){
+      // rodilla: desviación frontal respecto de la línea cadera→tobillo; signo = hacia adentro (+) / afuera (−)
+      const L=Math.hypot(an.x-h.x,an.y-h.y); if(L>1){
+        const cross=((an.x-h.x)*(kn.y-h.y)-(an.y-h.y)*(kn.x-h.x))/L; // dist perpendicular con signo
+        const mag=Math.abs(180-angle3(h,kn,an));
+        // signo relativo al eje del cuerpo: + = rodilla hacia adentro (valgo), − = hacia afuera (varo)
+        const mx=midX(k); let sign=cross>=0?1:-1;
+        if(mx!=null){ const kneeInner = side==='left' ? (kn.x>mx) : (kn.x<mx); sign = kneeInner?1:-1; }
+        bySide[side].knee.push(sign*mag);
+        // pie/pronación (experimental): ángulo frontal del pie (tobillo→dedos) vs la tibia (rodilla→tobillo)
+        const fo=k[side+'_foot_index'];
+        if(fo&&fo.score>.3){ const shank=Math.atan2(an.y-kn.y,an.x-kn.x), foot=Math.atan2(fo.y-an.y,fo.x-an.x); let d=(foot-shank)*180/Math.PI; while(d>90)d-=180; while(d<-90)d+=180; bySide[side].foot.push(d); }
+      }
     }
   });
-  const valgus=valg.length?median(valg):null;
-  return Object.assign(b,{view:'rear',cpd,valgus,valgN:valg.length});
+  const med=a=>a.length?median(a):null;
+  const rear={
+    pelvis:{L:med(bySide.left.pel), R:med(bySide.right.pel)},
+    knee:{L:med(bySide.left.knee), R:med(bySide.right.knee)},
+    foot:{L:med(bySide.left.foot), R:med(bySide.right.foot)},
+    nL:bySide.left.knee.length, nR:bySide.right.knee.length
+  };
+  // compatibilidad con findings/PDF existentes
+  const cpd=(rear.pelvis.L!=null||rear.pelvis.R!=null)?Math.max(rear.pelvis.L||0,rear.pelvis.R||0):null;
+  const valgAll=[...bySide.left.knee,...bySide.right.knee].map(Math.abs);
+  const valgus=valgAll.length?median(valgAll)/60:null; // aprox como fracción para el umbral viejo
+  return Object.assign(b,{view:'rear',rear,cpd,valgus,valgN:valgAll.length});
 }
 
 /* ---------- MARCHA (gait): GCT, vuelo, duty factor, simetría, pisada ----------
@@ -1799,21 +1820,38 @@ function lateralCards(r){
 function rearCards(r){
   let html='';
   const cad=Math.round(r.cadence);
-  html+=metricCard({name:'Cadencia (verificación)',conf:'Confianza alta',val:cad,unit:'pasos/min',
+  html+=metricCard({name:'Cadencia (verificación)',val:cad,unit:'pasos/min',
     bandClass:cad>=170?'b-good':cad>=160?'b-warn':'b-bad',bandLabel:cad>=170?'En rango':cad>=160?'Mejorable':'Baja',
     desc:'Se recalcula en la vista trasera como control; debería coincidir con la lateral.',ref:'Guía provisional: >170 spm.'});
-  if(r.cpd!=null){
-    const c=r.cpd, cb=c<=6?'b-good':c<=10?'b-warn':'b-bad', cl=c<=6?'Neutral':c<=10?'Leve':'Marcado';
-    html+=metricCard({name:'Caída pélvica contralateral',conf:'Confianza media',val:c.toFixed(0),unit:'° (pico)',
-      bandClass:cb,bandLabel:cl,desc:'Cuánto cae la pelvis del lado que no apoya durante el apoyo. Un descenso marcado se asocia de forma prospectiva a mayor riesgo de lesión y suele indicar debilidad de abductores de cadera.',
-      ref:'Umbrales provisionales: ≤6° · 6–10° · >10°.'});
-  }
-  if(r.valgus!=null){
-    const vg=r.valgus, vb=vg<=0.08?'b-good':vg<=0.15?'b-warn':'b-bad', vl=vg<=0.08?'Neutral':vg<=0.15?'Leve':'Marcado';
-    html+=metricCard({name:'Valgo dinámico de rodilla',conf:'Confianza menor · '+r.valgN+' apoyos',val:(vg*100).toFixed(0),unit:'% del largo de pierna',
-      bandClass:vb,bandLabel:vl,desc:'Cuánto se desvía la rodilla hacia adentro respecto de la línea cadera–tobillo en el apoyo. El valgo dinámico se vincula a dolor patelofemoral y lesiones de rodilla.',
-      ref:'Umbrales provisionales: ≤8% · 8–15% · >15%. Métrica de plano frontal, límite conocido de la pose 2D.'});
-  }
+  const R=r.rear; if(!R) return html;
+  const sideName=sd=>sd==='L'?'Izquierda':'Derecha';
+  // PELVIS
+  html+='<h3 class="sec-h">Pelvis — alineación (izquierda vs derecha)</h3>';
+  ['L','R'].forEach(sd=>{ const v=R.pelvis[sd]; if(v==null)return; const st=v<=2?'b-good':v<=4?'b-warn':'b-bad', ok=st==='b-good';
+    html+=ochyCard(sideName(sd)+': '+(ok?'Pelvis alineada':'Caída pélvica'),st, partImg('pelvis.png',v,{mirror:sd==='R'}), v.toFixed(1)+'°','0° ; 2°',[
+      {h:'Resumen',p:ok?'Los lados de la pelvis quedan a la misma altura en el apoyo: posición ideal.':'La pelvis cae hacia el lado que no apoya durante el apoyo de este lado.'},
+      {h:'Consecuencias',p:ok?'Buena estabilidad de cadera y menor riesgo de sobrecarga.':'Se asocia de forma prospectiva a mayor riesgo de lesión; suele indicar debilidad de abductores de cadera (glúteo medio).'},
+      {h:'Corrección',p:ok?'Mantené esta estabilidad; seguí con trabajo de core y glúteos.':'Fortalecé glúteo medio y core: abducciones de cadera, planchas laterales, monster walks.'}]);
+  });
+  // RODILLA (aducción/valgo)
+  html+='<h3 class="sec-h">Rodilla — alineación frontal (izquierda vs derecha)</h3>';
+  ['L','R'].forEach(sd=>{ const v=R.knee[sd]; if(v==null)return; const a=Math.abs(v), st=a<=3?'b-good':a<=6?'b-warn':'b-bad', ok=st==='b-good';
+    const dir=v>=0?'hacia adentro (valgo)':'hacia afuera (varo)';
+    html+=ochyCard(sideName(sd)+': '+(ok?'Rodilla alineada':(v>=0?'Aducción (valgo)':'Desviación en varo')),st, partImg('pierna-frente.png',v,{mirror:sd==='R'}), v.toFixed(1)+'°','-3° ; 3°',[
+      {h:'Resumen',p:ok?'La rodilla se mantiene alineada entre cadera y tobillo en el apoyo.':'La rodilla se desvía '+dir+' respecto de la línea cadera–tobillo.'},
+      {h:'Consecuencias',p:ok?'Buena distribución de cargas en la rodilla.':'Se vincula a dolor patelofemoral y sobrecarga de rodilla; bandera a mirar.'},
+      {h:'Corrección',p:ok?'Mantené esta alineación.':'Imaginá una línea recta cadera–rodilla–tobillo; activá glúteos, isquios y cuádriceps para estabilizar la rodilla.'}]);
+  });
+  // PIE (pronación) — experimental
+  html+='<h3 class="sec-h">Pie — pronación (izquierda vs derecha) · experimental</h3>';
+  ['L','R'].forEach(sd=>{ const v=R.foot[sd]; if(v==null)return; const a=Math.abs(v), st=a<=3?'b-good':a<=6?'b-warn':'b-bad', ok=st==='b-good';
+    const dir=v>=0?'pronación (rueda hacia adentro)':'supinación (rueda hacia afuera)';
+    html+=ochyCard(sideName(sd)+': '+(ok?'Pie neutro':(v>=0?'Pronación':'Supinación')),st, partImg('pie.png',v,{mirror:sd==='R'}), v.toFixed(1)+'°','-3° ; 3°',[
+      {h:'Resumen',p:ok?'El pie apoya en posición neutra.':'El pie tiende a '+dir+' en el apoyo.'},
+      {h:'Consecuencias',p:ok?'Posición ideal para un apoyo eficiente.':'Una pronación/supinación marcada puede asociarse a periostitis, fascitis plantar o tendinitis de Aquiles.'},
+      {h:'Corrección',p:'Trabajá propiocepción y fuerza de pie y tobillo. Nota: la pronación por video 2D es orientativa, validá con un profesional.'}]);
+  });
+  html+='<div class="obox" style="margin-top:6px;font-size:.78rem"><b>Nota sobre precisión</b>Las métricas de plano frontal (pelvis, rodilla, pie) tienen menor precisión con pose 2D (límite conocido, ICC de tobillo bajo). Provisionales, a validar con el profesional.</div>';
   return html;
 }
 
