@@ -1958,18 +1958,26 @@ function downloadPdf(runner,btn){
   if(typeof html2pdf==='undefined'){ alert('No se pudo cargar el generador de PDF (sin conexión o CDN bloqueado). Reintentá con conexión.'); return; }
   const prev=btn?btn.textContent:''; if(btn){ btn.disabled=true; btn.textContent='Generando PDF…'; }
   const node=$('pdfReport');
-  // html2canvas captura en blanco si el nodo está fuera de pantalla → lo traemos a pantalla, tapado por un overlay
-  const ov=document.createElement('div');
+  // El nodo debe quedar EN PANTALLA con position:static para que html2canvas mida su altura real
+  // (fixed/absolute fuera de pantalla → altura 0 → PDF en blanco). Lo tapamos con un overlay para no
+  // mostrar el flash, y le decimos a html2canvas que IGNORE ese overlay (si no, lo captura encima = blanco).
+  const ov=document.createElement('div'); ov.setAttribute('data-pdf-ignore','1');
   ov.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:2147483647;display:flex;align-items:center;justify-content:center;color:var(--ink);font-family:var(--mono);font-size:.9rem';
   ov.textContent='Generando reporte PDF…'; document.body.appendChild(ov);
-  // html2canvas mide un elemento position:fixed como altura 0 → PDF en blanco. Forzamos position:static durante la captura.
   const saved=node.style.cssText;
-  node.style.position='static'; node.style.left='0'; node.style.top='0'; node.style.margin='0 auto'; node.style.zIndex='2147483646';
+  node.style.position='static'; node.style.left='0'; node.style.top='0'; node.style.right='auto'; node.style.margin='0 auto'; node.style.transform='none';
   const restore=()=>{ node.style.cssText=saved; try{ov.remove();}catch(e){} if(btn){ btn.disabled=false; btn.textContent=prev; } };
+  const opts={margin:8,
+    filename:`correxo-reporte-${(runner||'corredor').toLowerCase().replace(/\s+/g,'-')}-${new Date().toISOString().split('T')[0]}.pdf`,
+    image:{type:'jpeg',quality:.95},
+    html2canvas:{scale:2,backgroundColor:'#ffffff',useCORS:true,imageTimeout:15000,scrollX:0,scrollY:0,
+      ignoreElements:(el)=>el.getAttribute&&el.getAttribute('data-pdf-ignore')==='1'},
+    jsPDF:{orientation:'portrait',unit:'mm',format:'a4'},
+    pagebreak:{mode:['css','legacy']}};
   try{
-    const p=html2pdf().set({margin:8,filename:`correxo-reporte-${(runner||'corredor').toLowerCase().replace(/\s+/g,'-')}-${new Date().toISOString().split('T')[0]}.pdf`,image:{type:'jpeg',quality:.97},html2canvas:{scale:2,backgroundColor:'#ffffff',useCORS:true},jsPDF:{orientation:'portrait',unit:'mm',format:'a4'}}).from(node).save();
-    if(p&&p.then) p.then(restore).catch(err=>{console.error('PDF err',err);alert('Falló la generación del PDF.');restore();});
-    else setTimeout(restore,3000);
+    const p=html2pdf().set(opts).from(node).save();
+    if(p&&p.then) p.then(restore).catch(err=>{console.error('PDF err',err);alert('Falló la generación del PDF. Reintentá.');restore();});
+    else setTimeout(restore,4000);
   }catch(err){ console.error('PDF err',err); alert('Falló la generación del PDF.'); restore(); }
 }
 $('pdfBtn').addEventListener('click',()=>{ const runner=buildPdf(); downloadPdf(runner,$('pdfBtn')); });
