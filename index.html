@@ -1346,7 +1346,7 @@ function renderReport(view,r){
   el(view,'results').classList.add('show');
   const badGate=renderQuality(view,r,[]);
   if(badGate){ el(view,'metrics').innerHTML=gateCard(view,r); return; }
-  el(view,'metrics').innerHTML = view==='lat' ? lateralCards(r) : rearCards(r);
+  el(view,'metrics').innerHTML = (view==='lat'||view==='oplat') ? lateralCards(r) : rearCards(r);
 }
 
 const SEGMENTS=[
@@ -1555,6 +1555,7 @@ function buildPdf(opts){
       if(g.symmetry!=null) rows+=metricRow('Simetría izq/der',g.symmetry.toFixed(0),'%',g.symmetry<=5?'b-good':g.symmetry<=10?'b-warn':'b-bad',g.symmetry<=5?'Simétrico':g.symmetry<=10?'Leve asimetría':'Asimetría marcada');
       if(g.footStrike) rows+=metricRow('Patrón de pisada',g.footStrike,'','b-good','Descriptivo');
     }
+    if(L.angles&&L.angles.anglesN>=3){ SEGMENTS.forEach(seg=>{const v=seg.get(L.angles); if(v!=null){const st=segStatus(v,seg.good); rows+=metricRow(seg.name,v.toFixed(0),'°',st,st==='b-good'?'En rango':st==='b-warn'?'Cerca':'Fuera');}}); }
   }
   if(R&&R.enough){
     if(R.cpd!=null) rows+=metricRow('Caída pélvica contralateral',R.cpd.toFixed(0),'° pico',R.cpd<=6?'b-good':R.cpd<=10?'b-warn':'b-bad',R.cpd<=6?'Neutral':R.cpd<=10?'Leve':'Marcado');
@@ -1571,7 +1572,7 @@ function buildPdf(opts){
   $('pdfReport').innerHTML=`
     <h1>CORREXO · Reporte de screening biomecánico</h1>
     <div class="pmeta">Corredor: <b>${runner}</b> · Fecha: ${date}${pro?' · Profesional: <b>'+pro+'</b>':''}</div>
-    <h2>Índice de screening: ${idx}/100</h2>
+    <h2>Índice de screening: ${idx}/100${(L&&L.enough&&computeScore(L)!=null)?' · Puntuación de análisis: '+computeScore(L)+'%':''}</h2>
     ${findings}
     <h2>Métricas medidas</h2>
     <table><thead><tr><th>Métrica</th><th>Valor</th><th>Banda</th></tr></thead><tbody>${rows||'<tr><td colspan="3">Sin datos suficientes</td></tr>'}</tbody></table>
